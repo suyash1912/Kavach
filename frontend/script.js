@@ -643,6 +643,8 @@ class FraudTable extends DataTable {
     `;
     
     modal.showModal();
+    Dashboard.renderExplainability(tx);
+    CaseManager.bindActions(tx);
   }
 }
 
@@ -1003,6 +1005,107 @@ const ChartManager = {
     if (this.instances[id]) {
       this.instances[id].destroy();
       delete this.instances[id];
+    }
+  }
+};
+
+// ==========================================
+// Case Manager
+// ==========================================
+
+const CaseManager = {
+  storageKey: 'kavach_cases',
+  cases: [],
+
+  load() {
+    try {
+      const raw = localStorage.getItem(this.storageKey);
+      this.cases = raw ? JSON.parse(raw) : [];
+    } catch {
+      this.cases = [];
+    }
+  },
+
+  save() {
+    localStorage.setItem(this.storageKey, JSON.stringify(this.cases));
+  },
+
+  addCase(tx) {
+    if (!tx || !tx.id) return;
+    const exists = this.cases.find(c => c.id === tx.id);
+    if (exists) {
+      Toast.show('Case already exists for this transaction', 'info');
+      return;
+    }
+    const newCase = {
+      id: tx.id,
+      user_id: tx.user_id || 'Unknown',
+      amount: tx.amount || 0,
+      country: tx.country || 'Unknown',
+      fraud_score: tx.fraud_score || 0,
+      status: 'open',
+      created_at: new Date().toISOString()
+    };
+    this.cases.unshift(newCase);
+    this.save();
+    this.render();
+    Toast.show('Case opened', 'success');
+  },
+
+  updateStatus(id, status) {
+    const item = this.cases.find(c => c.id === id);
+    if (!item) return;
+    item.status = status;
+    this.save();
+    this.render();
+  },
+
+  clearAll() {
+    this.cases = [];
+    this.save();
+    this.render();
+  },
+
+  render() {
+    const container = DOM.$('#case-list');
+    if (!container) return;
+    if (!this.cases.length) {
+      container.innerHTML = '<p class="analysis-subtitle">No cases yet. Open a case from a flagged transaction.</p>';
+      return;
+    }
+
+    container.innerHTML = this.cases.map(c => `
+      <div class="case-item">
+        <div>
+          <div class="case-id">Case #${c.id}</div>
+          <div>${c.user_id}</div>
+        </div>
+        <div>${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(c.amount || 0)}</div>
+        <div>${c.country}</div>
+        <div class="case-status ${c.status}">${c.status}</div>
+        <div>
+          <select data-case="${c.id}" class="case-status-select">
+            <option value="open" ${c.status === 'open' ? 'selected' : ''}>Open</option>
+            <option value="review" ${c.status === 'review' ? 'selected' : ''}>Review</option>
+            <option value="escalated" ${c.status === 'escalated' ? 'selected' : ''}>Escalated</option>
+            <option value="closed" ${c.status === 'closed' ? 'selected' : ''}>Closed</option>
+          </select>
+        </div>
+      </div>
+    `).join('');
+
+    container.querySelectorAll('.case-status-select').forEach(sel => {
+      sel.addEventListener('change', (e) => {
+        const id = parseInt(e.target.getAttribute('data-case'), 10);
+        this.updateStatus(id, e.target.value);
+      });
+    });
+  },
+
+  bindActions(tx) {
+    const openBtn = DOM.$('.case-actions .primary-btn');
+    if (openBtn) {
+      openBtn.onclick = () => this.addCase(tx);
     }
   }
 };
@@ -1390,12 +1493,18 @@ const Dashboard = {
   tables: {},
   orbitTimer: null,
   orbitAngle: 0,
+  stats: {
+    user: new Map(),
+    country: new Map()
+  },
   
   async init() {
     Toast.init();
     LoadingManager.init();
     UploadManager.init();
     AIChat.init();
+    CaseManager.load();
+    CaseManager.render();
     
     // Initialize tables before data load so hydration can populate them.
     this.initTables();
@@ -1440,6 +1549,7 @@ const Dashboard = {
   hydrateDashboard(data) {
     const { insights, transactions, fraud_table, user_profile, sample_rows } = data;
     this.hideSkeletons();
+    this.buildStats(transactions || []);
     
     // KPIs
     const totalSpend = insights?.total_spend || 0;
@@ -1498,6 +1608,9 @@ const Dashboard = {
     
     // Charts
     this.initCharts(data);
+    this.initSimulator(transactions || []);
+    this.initComparator(transactions || []);
+    this.renderHeatmap(transactions || []);
     
     // 3D Viz
     if (transactions?.length > 0) {
@@ -1529,6 +1642,233 @@ const Dashboard = {
     DOM.$('#tx-search')?.addEventListener('input', DOM.debounce((e) => {
       this.tables.transactions.search(e.target.value);
     }, 300));
+  },
+
+  buildStats(transactions) {
+    this.stats.user.clear();
+    this.stats.country.clear();
+
+    transactions.forEach(tx => {
+      const userId = tx.user_id || 'Unknown';
+      const user = this.stats.user.get(userId) || { count: 0, sum: 0, sumSq: 0, countries: new Map(), riskSum: 0 };
+      const amount = parseFloat(tx.amount || 0);
+      user.count += 1;
+      user.sum += amount;
+      user.sumSq += amount * amount;
+      user.riskSum += parseFloat(tx.fraud_score || 0);
+      const country = tx.country || 'Unknown';
+      user.countries.set(country, (user.countries.get(country) || 0) + 1);
+      this.stats.user.set(userId, user);
+
+      const c = this.stats.country.get(country) || { count: 0, riskSum: 0 };
+      c.count += 1;
+      c.riskSum += parseFloat(tx.fraud_score || 0);
+      this.stats.country.set(country, c);
+    });
+  },
+
+  renderExplainability(tx) {
+    const metrics = DOM.$('#explain-metrics');
+    const chips = DOM.$('#explain-chips');
+    const title = DOM.$('#explain-title');
+    if (!metrics || !chips || !title || !tx) return;
+
+    const userId = tx.user_id || 'Unknown';
+    const user = this.stats.user.get(userId);
+    const amount = parseFloat(tx.amount || 0);
+    const fraudScore = parseFloat(tx.fraud_score || 0);
+
+    let mean = 0;
+    let std = 0;
+    let avgRisk = 0;
+    let commonCountry = 'Unknown';
+    if (user) {
+      mean = user.sum / user.count;
+      const variance = Math.max((user.sumSq / user.count) - mean * mean, 0);
+      std = Math.sqrt(variance);
+      avgRisk = user.riskSum / user.count;
+      let maxCount = 0;
+      user.countries.forEach((count, country) => {
+        if (count > maxCount) {
+          maxCount = count;
+          commonCountry = country;
+        }
+      });
+    }
+
+    const drivers = [];
+    if (tx.velocity_flag) drivers.push('Velocity spike');
+    if (tx.rule_based_fraud_flag) drivers.push('Rule-based anomaly');
+    if (tx.model_fraud_flag) drivers.push('Model flagged');
+    if (fraudScore > 0.75) drivers.push('High risk score');
+    if (std > 0 && amount > mean + 2 * std) drivers.push('Unusually large amount');
+    if (tx.country && commonCountry !== 'Unknown' && tx.country !== commonCountry) {
+      drivers.push('Unusual country for user');
+    }
+    if (!drivers.length) drivers.push('No dominant driver detected');
+
+    title.textContent = `Explainability for Transaction ${tx.id ?? 'N/A'}`;
+    metrics.innerHTML = `
+      <div class="explain-metric">
+        <span class="label">User Avg Amount</span>
+        <span class="value">${this.formatCurrency(mean)}</span>
+      </div>
+      <div class="explain-metric">
+        <span class="label">Txn Amount</span>
+        <span class="value">${this.formatCurrency(amount)}</span>
+      </div>
+      <div class="explain-metric">
+        <span class="label">Risk Score</span>
+        <span class="value">${fraudScore.toFixed(2)}</span>
+      </div>
+      <div class="explain-metric">
+        <span class="label">User Avg Risk</span>
+        <span class="value">${avgRisk.toFixed(2)}</span>
+      </div>
+    `;
+
+    chips.innerHTML = drivers.map(d => `<span class="explain-chip">${d}</span>`).join('');
+  },
+
+  renderHeatmap(transactions) {
+    const container = DOM.$('#heatmap');
+    if (!container || transactions.length === 0) return;
+
+    const byCategory = new Map();
+    const byCountry = new Map();
+
+    transactions.forEach(tx => {
+      const cat = tx.category || 'Unknown';
+      const ctry = tx.country || 'Unknown';
+      byCategory.set(cat, (byCategory.get(cat) || 0) + 1);
+      byCountry.set(ctry, (byCountry.get(ctry) || 0) + 1);
+    });
+
+    const topCategories = Array.from(byCategory.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([c]) => c);
+    const topCountries = Array.from(byCountry.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([c]) => c);
+
+    const matrix = {};
+    transactions.forEach(tx => {
+      const cat = tx.category || 'Unknown';
+      const ctry = tx.country || 'Unknown';
+      if (!topCategories.includes(cat) || !topCountries.includes(ctry)) return;
+      const key = `${cat}::${ctry}`;
+      const entry = matrix[key] || { count: 0, riskSum: 0 };
+      entry.count += 1;
+      entry.riskSum += parseFloat(tx.fraud_score || 0);
+      matrix[key] = entry;
+    });
+
+    const rows = [];
+    rows.push(`
+      <div class="heatmap-row">
+        <div class="heatmap-cell heatmap-label">Category</div>
+        ${topCountries.map(c => `<div class="heatmap-cell">${c}</div>`).join('')}
+      </div>
+    `);
+
+    topCategories.forEach(cat => {
+      const cells = topCountries.map(ctry => {
+        const key = `${cat}::${ctry}`;
+        const entry = matrix[key];
+        const avgRisk = entry ? entry.riskSum / entry.count : 0;
+        const intensity = Math.min(0.85, 0.15 + avgRisk);
+        const bg = `rgba(244, 63, 94, ${intensity})`;
+        return `<div class="heatmap-cell" style="background:${bg}">${avgRisk.toFixed(2)}</div>`;
+      }).join('');
+
+      rows.push(`
+        <div class="heatmap-row">
+          <div class="heatmap-cell heatmap-label">${cat}</div>
+          ${cells}
+        </div>
+      `);
+    });
+
+    container.innerHTML = rows.join('');
+  },
+
+  initSimulator(transactions) {
+    const slider = DOM.$('#risk-threshold');
+    const thresholdEl = DOM.$('#sim-threshold');
+    const flaggedEl = DOM.$('#sim-flagged');
+    const rateEl = DOM.$('#sim-rate');
+    if (!slider || !thresholdEl || !flaggedEl || !rateEl) return;
+
+    const compute = () => {
+      const threshold = parseFloat(slider.value);
+      const flagged = transactions.filter(tx => parseFloat(tx.fraud_score || 0) >= threshold).length;
+      const rate = transactions.length ? (flagged / transactions.length) * 100 : 0;
+      thresholdEl.textContent = threshold.toFixed(2);
+      flaggedEl.textContent = flagged.toString();
+      rateEl.textContent = `${rate.toFixed(1)}%`;
+    };
+
+    slider.addEventListener('input', compute);
+    compute();
+  },
+
+  initComparator(transactions) {
+    const selectA = DOM.$('#compare-a');
+    const selectB = DOM.$('#compare-b');
+    const btn = DOM.$('#compare-run');
+    const grid = DOM.$('#compare-grid');
+    if (!selectA || !selectB || !btn || !grid) return;
+
+    const users = Array.from(new Set(transactions.map(tx => tx.user_id))).filter(Boolean).slice(0, 50);
+    selectA.innerHTML = users.map(u => `<option value="${u}">${u}</option>`).join('');
+    selectB.innerHTML = users.map(u => `<option value="${u}">${u}</option>`).join('');
+    if (users.length > 1) selectB.value = users[1];
+
+    const summarize = (userId) => {
+      const subset = transactions.filter(tx => tx.user_id === userId);
+      const total = subset.reduce((sum, tx) => sum + parseFloat(tx.amount || 0), 0);
+      const avg = subset.length ? total / subset.length : 0;
+      const risk = subset.reduce((sum, tx) => sum + parseFloat(tx.fraud_score || 0), 0) / Math.max(subset.length, 1);
+      return { total, avg, count: subset.length, risk };
+    };
+
+    const render = () => {
+      const a = summarize(selectA.value);
+      const b = summarize(selectB.value);
+      grid.innerHTML = `
+        <div class="compare-card">
+          <span class="label">Entity A Total</span>
+          <div class="value">${this.formatCurrency(a.total)}</div>
+        </div>
+        <div class="compare-card">
+          <span class="label">Entity B Total</span>
+          <div class="value">${this.formatCurrency(b.total)}</div>
+        </div>
+        <div class="compare-card">
+          <span class="label">Entity A Avg</span>
+          <div class="value">${this.formatCurrency(a.avg)}</div>
+        </div>
+        <div class="compare-card">
+          <span class="label">Entity B Avg</span>
+          <div class="value">${this.formatCurrency(b.avg)}</div>
+        </div>
+        <div class="compare-card">
+          <span class="label">Entity A Risk</span>
+          <div class="value">${a.risk.toFixed(2)}</div>
+        </div>
+        <div class="compare-card">
+          <span class="label">Entity B Risk</span>
+          <div class="value">${b.risk.toFixed(2)}</div>
+        </div>
+      `;
+    };
+
+    btn.addEventListener('click', render);
+    render();
+  },
+
+  formatCurrency(amount) {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 2
+    }).format(amount || 0);
   },
   
   renderSampleTable(rows) {
@@ -1677,6 +2017,10 @@ const Dashboard = {
     DOM.$('#export-analysis')?.addEventListener('click', () => this.exportReport());
     DOM.$('#export-risk')?.addEventListener('click', () => this.exportFlaggedPdf());
     DOM.$('#export-all')?.addEventListener('click', () => this.exportTable('transactions'));
+    DOM.$('#case-clear')?.addEventListener('click', () => {
+      CaseManager.clearAll();
+      Toast.show('Cases cleared', 'info');
+    });
     
     // Refresh
     DOM.$('#refresh-data')?.addEventListener('click', () => {
@@ -1742,11 +2086,76 @@ const Dashboard = {
   },
   
   exportReport() {
+    const insights = Store.get('insights');
+    const transactions = Store.get('transactions');
+    if (!transactions || transactions.length === 0) {
+      Toast.show('No data to export', 'error');
+      return;
+    }
+
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+      Toast.show('PDF library not loaded', 'error');
+      return;
+    }
+
     Toast.show('Generating PDF report...', 'info');
-    // Implementation would generate PDF from current data
-    setTimeout(() => {
-      Toast.show('Report downloaded', 'success');
-    }, 1500);
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+
+    const profile = Store.get('userProfile') || {};
+    const analystName = profile.name || 'Analyst';
+    const auditType = profile.sheet_type || 'Audit';
+
+    doc.setFillColor(12, 18, 36);
+    doc.rect(0, 0, doc.internal.pageSize.getWidth(), 90, 'F');
+    doc.setTextColor(226, 232, 240);
+    doc.setFontSize(20);
+    doc.text('KAVACH Risk Intelligence Report', 40, 45);
+    doc.setFontSize(11);
+    doc.text(`Analyst: ${analystName}`, 40, 65);
+    doc.text(`Audit: ${auditType}`, 240, 65);
+
+    doc.setTextColor(20, 24, 38);
+    doc.setFontSize(12);
+    let y = 120;
+
+    const totalSpend = insights?.total_spend || 0;
+    const txCount = transactions.length;
+    const avgRisk = transactions.reduce((sum, tx) => sum + parseFloat(tx.fraud_score || 0), 0) / Math.max(txCount, 1);
+
+    doc.text(`Total Spend: ${this.formatCurrency(totalSpend)}`, 40, y);
+    y += 18;
+    doc.text(`Transactions: ${txCount}`, 40, y);
+    y += 18;
+    doc.text(`Average Risk Score: ${avgRisk.toFixed(2)}`, 40, y);
+    y += 28;
+
+    doc.setFontSize(11);
+    doc.text('Top Categories (by spend):', 40, y);
+    y += 16;
+    (insights?.top_categories || []).slice(0, 5).forEach((cat) => {
+      doc.text(`- ${cat.category}: ${this.formatCurrency(cat.total_spend)}`, 50, y);
+      y += 14;
+    });
+
+    y += 10;
+    doc.text('Monthly Trends:', 40, y);
+    y += 16;
+    (insights?.monthly_trends || []).slice(-6).forEach((month) => {
+      doc.text(`- ${month.month}: ${this.formatCurrency(month.total_spend)}`, 50, y);
+      y += 14;
+    });
+
+    y += 10;
+    doc.text(`Open Cases: ${CaseManager.cases?.length || 0}`, 40, y);
+
+    const dateStr = new Date().toLocaleString();
+    doc.setTextColor(120, 135, 155);
+    doc.setFontSize(9);
+    doc.text(`Generated: ${dateStr}`, 40, doc.internal.pageSize.getHeight() - 30);
+
+    doc.save(`kavach-risk-report-${new Date().toISOString().split('T')[0]}.pdf`);
+    Toast.show('Report downloaded', 'success');
   },
   
   exportTable(tableName) {

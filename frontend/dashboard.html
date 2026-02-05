@@ -412,6 +412,94 @@
         </div>
       </section>
 
+      <!-- Explainability + Scenario Simulator -->
+      <section class="grid grid-2 reveal">
+        <div class="card glass">
+          <div class="card-header">
+            <h2>Explainability Panel</h2>
+            <span class="chip">Per Transaction</span>
+          </div>
+          <div class="explain-panel">
+            <p class="analysis-subtitle" id="explain-title">Select a flagged transaction to see drivers</p>
+            <div class="explain-metrics" id="explain-metrics"></div>
+            <div class="explain-chips" id="explain-chips"></div>
+          </div>
+        </div>
+
+        <div class="card glass">
+          <div class="card-header">
+            <h2>Scenario Simulator</h2>
+            <span class="chip">What-if</span>
+          </div>
+          <div class="simulator">
+            <label for="risk-threshold">Risk Threshold</label>
+            <input type="range" id="risk-threshold" min="0.1" max="0.95" step="0.05" value="0.6" />
+            <div class="simulator-metrics">
+              <div>
+                <span class="sim-label">Threshold</span>
+                <span class="sim-value" id="sim-threshold">0.60</span>
+              </div>
+              <div>
+                <span class="sim-label">Flagged Count</span>
+                <span class="sim-value" id="sim-flagged">—</span>
+              </div>
+              <div>
+                <span class="sim-label">Estimated Risk Rate</span>
+                <span class="sim-value" id="sim-rate">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Risk Heatmap + Comparator -->
+      <section class="grid grid-2 reveal">
+        <div class="card glass">
+          <div class="card-header">
+            <h2>Risk Heatmap</h2>
+            <span class="chip">Category × Country</span>
+          </div>
+          <div id="heatmap" class="heatmap"></div>
+        </div>
+
+        <div class="card glass">
+          <div class="card-header">
+            <h2>Risk Comparator</h2>
+            <span class="chip">Side-by-side</span>
+          </div>
+          <div class="comparator">
+            <div class="compare-selectors">
+              <label>
+                <span>Entity A</span>
+                <select id="compare-a"></select>
+              </label>
+              <label>
+                <span>Entity B</span>
+                <select id="compare-b"></select>
+              </label>
+              <button class="ghost-btn btn-sm" id="compare-run">Compare</button>
+            </div>
+            <div class="compare-grid" id="compare-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Case Management -->
+      <section class="grid grid-1 reveal">
+        <div class="card glass">
+          <div class="card-header">
+            <div>
+              <h2>Case Management</h2>
+              <p class="analysis-subtitle">Track investigation workflow and analyst actions</p>
+            </div>
+            <div class="header-actions">
+              <button class="ghost-btn btn-sm" id="case-clear">Clear Cases</button>
+            </div>
+          </div>
+          <div class="case-list" id="case-list"></div>
+        </div>
+      </section>
+
       <!-- 3D Visualization -->
       <section class="grid grid-2 reveal">
         <div class="card glass">

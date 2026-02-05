@@ -57,7 +57,8 @@ def engineer_transaction_features(df_raw: pd.DataFrame) -> pd.DataFrame:
 
     # I flag unusually high velocity days per user (simple heuristic).
     # This keeps the rule interpretable for the UI.
-    velocity_threshold = max(5.0, df["user_tx_velocity_per_day"].quantile(0.9))
+    quantile_val = df["user_tx_velocity_per_day"].quantile(0.9)
+    velocity_threshold = 5.0 if pd.isna(quantile_val) else max(5.0, float(quantile_val))
     df["velocity_flag"] = df["user_tx_velocity_per_day"] > velocity_threshold
 
     # I compute rolling mean and std for the last 10 transactions per user.
