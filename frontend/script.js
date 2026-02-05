@@ -892,6 +892,7 @@ const ChartManager = {
     const ctx = DOM.$(`#${canvasId}`)?.getContext('2d');
     if (!ctx) return;
 
+    const palette = this.themePalette();
     if (this.instances[canvasId]) {
       this.instances[canvasId].destroy();
     }
@@ -952,7 +953,8 @@ const ChartManager = {
   createPlotly3D(containerId, transactions) {
     const container = DOM.$(`#${containerId}`);
     if (!container || typeof Plotly === 'undefined') return;
-    
+
+    const palette = this.themePalette();
     const points = transactions.slice(0, 300);
     if (points.length === 0) return;
     
@@ -1022,6 +1024,7 @@ const ChartManager = {
     const container = DOM.$(`#${containerId}`);
     if (!container || typeof Plotly === 'undefined') return;
 
+    const palette = this.themePalette();
     const byCountry = new Map();
     transactions.forEach(tx => {
       const country = tx.country || 'Unknown';
@@ -2805,6 +2808,3 @@ document.addEventListener('DOMContentLoaded', () => {
     Dashboard.init();
   }
 });
-    const palette = this.themePalette();
-    const palette = this.themePalette();
-    const palette = this.themePalette();

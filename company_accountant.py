@@ -161,6 +161,12 @@ def _prepare_frame(df: pd.DataFrame) -> pd.DataFrame:
             errors="coerce",
         )
         df["amount"] = df["amount"].fillna(0.0)
+    if "type" in df.columns and "amount" in df.columns:
+        type_vals = df["type"].astype(str).str.strip().str.lower()
+        debit_mask = type_vals.isin(["debit", "dr", "d"])
+        credit_mask = type_vals.isin(["credit", "cr", "c"])
+        df.loc[debit_mask, "amount"] = -df.loc[debit_mask, "amount"].abs()
+        df.loc[credit_mask, "amount"] = df.loc[credit_mask, "amount"].abs()
     return df
 
 

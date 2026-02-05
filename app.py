@@ -378,16 +378,11 @@ async def company_upload(file: UploadFile = File(...)) -> JSONResponse:
 
     try:
         df, report = analyze_company_file(tmp_path)
-    except Exception:
-        df = pd.DataFrame()
-        report = CAReport(
-            summary={"revenue": 0.0, "expenses": 0.0, "profit": 0.0},
-            monthly_trends=[],
-            category_totals=[],
-            anomalies=[{"row": "N/A", "field": "file", "issue": "Unreadable file", "suggestion": "Re-upload a valid sheet"}],
-            charts={},
-            verified=False,
-        )
+    except Exception as exc:
+        state.ca_df = None
+        state.ca_report = None
+        state.ca_last_upload_path = None
+        raise HTTPException(status_code=400, detail=str(exc))
 
     state.ca_df = df
     state.ca_report = {
@@ -407,7 +402,9 @@ async def company_upload(file: UploadFile = File(...)) -> JSONResponse:
 async def company_report() -> JSONResponse:
     if state.ca_report is None:
         raise HTTPException(status_code=400, detail="Please upload a company file first.")
-    return JSONResponse(state.ca_report)
+    payload = dict(state.ca_report)
+    payload["build"] = "verify-v2"
+    return JSONResponse(payload)
 
 
 @app.get("/company_report_excel")

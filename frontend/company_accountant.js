@@ -65,7 +65,10 @@
 
   async function fetchReport() {
     const res = await fetch('/company_report');
-    if (!res.ok) throw new Error('No report');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Unable to fetch report.' }));
+      throw new Error(err.detail || 'Unable to fetch report.');
+    }
     return res.json();
   }
 
@@ -76,8 +79,23 @@
     $('#ca-profit').textContent = formatCurrency(report.summary.profit);
     $('#ca-verified').textContent = report.verified ? 'Verified' : 'Issues Found';
 
-    $('#ca-trend').src = `data:image/png;base64,${report.charts.trend}`;
-    $('#ca-pie').src = `data:image/png;base64,${report.charts.expenses_pie}`;
+    const trendImg = $('#ca-trend');
+    if (report.charts?.trend && report.charts.trend.length > 50) {
+      trendImg.src = `data:image/png;base64,${report.charts.trend}`;
+      trendImg.hidden = false;
+    } else if (trendImg) {
+      trendImg.removeAttribute('src');
+      trendImg.hidden = true;
+    }
+
+    const pieImg = $('#ca-pie');
+    if (report.charts?.expenses_pie && report.charts.expenses_pie.length > 50) {
+      pieImg.src = `data:image/png;base64,${report.charts.expenses_pie}`;
+      pieImg.hidden = false;
+    } else if (pieImg) {
+      pieImg.removeAttribute('src');
+      pieImg.hidden = true;
+    }
 
     const tbody = $('#ca-anomalies tbody');
     tbody.innerHTML = report.anomalies.length
