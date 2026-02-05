@@ -14,10 +14,11 @@
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" as="style" />
   
   <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@600;700&family=Nunito:wght@400;600;700&family=DM+Serif+Display&family=Manrope:wght@400;600;700&family=Cormorant+Garamond:wght@600;700&display=swap" rel="stylesheet" />
   
   <!-- Styles -->
   <link rel="stylesheet" href="/static/style.css" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   
   <!-- Deferred heavy libraries -->
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -45,7 +46,9 @@
       </div>
       
       <nav class="top-tabs" role="navigation" aria-label="Main navigation">
-        <a class="tab-pill tab-pill-active" href="/dashboard" aria-current="page">Audit</a>
+        <a class="tab-pill" href="/">Home</a>
+        <a class="tab-pill tab-pill-active" href="/dashboard" aria-current="page">Shield</a>
+        <a class="tab-pill" href="/company_accountant">Verify <span class="pro-badge">Pro</span></a>
         <a class="tab-pill" href="/#pricing">Pricing</a>
         <a class="tab-pill" href="/#contact">Contact</a>
       </nav>
@@ -57,12 +60,13 @@
         <button class="badge badge-amber" id="ai-status" aria-label="AI service: KAVACH powered">
           <span class="status-dot pulse"></span> KAVACH
         </button>
-        <button class="icon-btn" id="theme-toggle" aria-label="Toggle dark/light mode">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="5"/>
-            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-          </svg>
-        </button>
+        <label class="theme-label" for="theme-select">Theme</label>
+        <select id="theme-select" class="theme-select" aria-label="Select theme">
+          <option value="aurora-core">Aurora Core</option>
+          <option value="sweet-dark">Sweet Dark</option>
+          <option value="dreamy">Dreamy</option>
+          <option value="solar-copper">Solar Copper</option>
+        </select>
       </div>
     </header>
 
@@ -86,7 +90,26 @@
           <span class="stat-value" id="live-risk-score">0.00</span>
           <div class="live-indicator" id="live-indicator">●</div>
         </div>
+        <div class="stat-item">
+          <span class="stat-label">Time Window</span>
+          <div class="time-range-group" id="time-range-group">
+            <button class="time-range active" data-range="all">All</button>
+            <button class="time-range" data-range="7d">7D</button>
+            <button class="time-range" data-range="30d">30D</button>
+            <button class="time-range" data-range="90d">90D</button>
+          </div>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Layout</span>
+          <button class="ghost-btn btn-sm" id="toggle-advanced">Show Advanced</button>
+        </div>
       </section>
+
+      <div class="section-banner">
+        <span class="eyebrow">Core Flow</span>
+        <h2>Audit Workflow</h2>
+        <p>Upload data, review flagged anomalies, and make decisions with confidence.</p>
+      </div>
 
       <!-- Upload Panel -->
       <section class="upload-panel glass reveal" aria-labelledby="upload-heading">
@@ -99,6 +122,14 @@
             <span class="feature-tag">✓ ML Anomaly Detection</span>
             <span class="feature-tag">✓ Rule-based Flags</span>
             <span class="feature-tag">✓ Real-time Analysis</span>
+          </div>
+          <div class="empty-coach" id="empty-coach">
+            <p class="analysis-subtitle">Get started in 3 steps:</p>
+            <ol class="coach-steps">
+              <li>Upload a sample or real transaction file</li>
+              <li>Review flagged anomalies and insights</li>
+              <li>Open cases and export reports</li>
+            </ol>
           </div>
         </div>
         
@@ -251,6 +282,14 @@
             <span id="high-risk-count">0</span> high, <span id="med-risk-count">0</span> medium
           </p>
         </article>
+        <article class="kpi-card glass">
+          <div class="kpi-header">
+            <p class="kpi-label">Top Anomaly</p>
+            <span class="kpi-trend">Risk Focus</span>
+          </div>
+          <p class="kpi-value" id="kpi-top-anomaly">—</p>
+          <p class="kpi-footnote" id="kpi-top-anomaly-detail">—</p>
+        </article>
       </section>
 
       <!-- Analysis Overview -->
@@ -293,6 +332,11 @@
               <p class="analysis-subtitle">Risk-ranked anomalies requiring review</p>
             </div>
             <div class="header-actions">
+              <div class="risk-threshold-control">
+                <label for="risk-global-threshold">Risk Threshold</label>
+                <input type="range" id="risk-global-threshold" min="0.1" max="0.95" step="0.05" value="0.6" />
+                <span id="risk-threshold-value">0.60</span>
+              </div>
               <button class="icon-btn" id="export-risk" aria-label="Export flagged transactions">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -301,6 +345,11 @@
                 </svg>
               </button>
             </div>
+          </div>
+          <div class="risk-legend" id="risk-legend">
+            <span class="legend-label">Risk Gradient</span>
+            <div class="legend-bar"></div>
+            <span class="legend-value">Low → High</span>
           </div>
           
           <div class="table-container" tabindex="0" role="region" aria-label="Flagged high risk transactions">
@@ -412,8 +461,14 @@
         </div>
       </section>
 
+      <div class="section-banner" data-advanced="true">
+        <span class="eyebrow">Advanced</span>
+        <h2>Deep‑Dive Intelligence</h2>
+        <p>Optional modules for investigations, explainability, and pitch‑ready insights.</p>
+      </div>
+
       <!-- Explainability + Scenario Simulator -->
-      <section class="grid grid-2 reveal">
+      <section class="grid grid-2 reveal" data-advanced="true">
         <div class="card glass">
           <div class="card-header">
             <h2>Explainability Panel</h2>
@@ -453,7 +508,7 @@
       </section>
 
       <!-- Risk Heatmap + Comparator -->
-      <section class="grid grid-2 reveal">
+      <section class="grid grid-2 reveal" data-advanced="true">
         <div class="card glass">
           <div class="card-header">
             <h2>Risk Heatmap</h2>
@@ -484,8 +539,82 @@
         </div>
       </section>
 
+      <!-- Pitch Features -->
+      <section class="grid grid-2 reveal" data-advanced="true">
+        <div class="card glass">
+          <div class="card-header">
+            <h2>Risk Movie Mode</h2>
+            <span class="chip">Narrative Replay</span>
+          </div>
+          <div class="risk-movie">
+            <div class="movie-stage" id="movie-stage">
+              <p class="analysis-subtitle">Press play to auto‑narrate anomalies over time.</p>
+            </div>
+            <div class="movie-controls">
+              <button class="primary-btn btn-sm" id="movie-play">Play</button>
+              <button class="ghost-btn btn-sm" id="movie-pause">Pause</button>
+              <span class="movie-progress" id="movie-progress">0%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card glass">
+          <div class="card-header">
+            <h2>CFO Snapshot</h2>
+            <span class="chip">Executive Summary</span>
+          </div>
+          <div class="cfo-snapshot" id="cfo-snapshot"></div>
+          <button class="ghost-btn btn-sm" id="cfo-export">Export Snapshot</button>
+        </div>
+      </section>
+
+      <section class="grid grid-2 reveal" data-advanced="true">
+        <div class="card glass">
+          <div class="card-header">
+            <h2>Counterfactual Simulator</h2>
+            <span class="chip">What‑If</span>
+          </div>
+          <div class="counterfactual">
+            <label>Remove country change signal</label>
+            <input type="checkbox" id="cf-country" />
+            <label>Reduce transaction amount by</label>
+            <input type="range" id="cf-amount" min="0" max="70" step="5" value="20" />
+            <div class="counterfactual-output" id="cf-output">Estimated flagged count: —</div>
+          </div>
+        </div>
+
+        <div class="card glass">
+          <div class="card-header">
+            <h2>Risk Personas</h2>
+            <span class="chip">Behavior Clusters</span>
+          </div>
+          <div class="persona-grid" id="persona-grid"></div>
+        </div>
+      </section>
+
+      <section class="grid grid-1 reveal" data-advanced="true">
+        <div class="card glass">
+          <div class="card-header">
+            <h2>Red‑Team Challenge</h2>
+            <span class="chip">Evasion Game</span>
+          </div>
+          <div class="redteam">
+            <div class="redteam-controls">
+              <label>Velocity Spike</label>
+              <input type="range" id="rt-velocity" min="0" max="10" step="1" value="6" />
+              <label>Geo Switches</label>
+              <input type="range" id="rt-geo" min="0" max="5" step="1" value="2" />
+              <label>Amount Outlier</label>
+              <input type="range" id="rt-amount" min="0" max="10" step="1" value="5" />
+              <button class="primary-btn btn-sm" id="rt-evaluate">Test Evasion</button>
+            </div>
+            <div class="redteam-result" id="rt-result">Risk engine result: —</div>
+          </div>
+        </div>
+      </section>
+
       <!-- Case Management -->
-      <section class="grid grid-1 reveal">
+      <section class="grid grid-1 reveal" data-advanced="true">
         <div class="card glass">
           <div class="card-header">
             <div>
@@ -501,7 +630,7 @@
       </section>
 
       <!-- 3D Visualization -->
-      <section class="grid grid-2 reveal">
+      <section class="grid grid-2 reveal" data-advanced="true">
         <div class="card glass">
           <div class="card-header">
             <h2>Risk Landscape 3D</h2>
@@ -543,7 +672,7 @@
       </section>
 
       <!-- Advanced Analytics Section -->
-      <section class="grid grid-2 reveal">
+      <section class="grid grid-2 reveal" data-advanced="true">
         <div class="card glass">
           <div class="card-header">
             <h2>Velocity Analysis</h2>
@@ -578,7 +707,7 @@
       </section>
 
       <!-- Full Transaction Table -->
-      <section class="grid grid-1 reveal">
+      <section class="grid grid-1 reveal" data-advanced="true">
         <div class="card glass">
           <div class="card-header">
             <div>
@@ -654,6 +783,16 @@
     </div>
     <div class="modal-body" id="modal-body"></div>
   </dialog>
+
+  <!-- User 360 Drawer -->
+  <div id="drawer-backdrop" class="drawer-backdrop" aria-hidden="true"></div>
+  <aside id="user-drawer" class="user-drawer" aria-hidden="true">
+    <div class="drawer-header">
+      <h3 id="drawer-title">User 360</h3>
+      <button class="icon-btn" id="drawer-close" aria-label="Close user drawer">✕</button>
+    </div>
+    <div class="drawer-body" id="drawer-body"></div>
+  </aside>
 
   <script src="/static/script.js"></script>
 </body>

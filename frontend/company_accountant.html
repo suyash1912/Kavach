@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="KAVACH Company Accountant - Verification report" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>KAVACH — Company CA Module</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@600;700&family=Nunito:wght@400;600;700&family=DM+Serif+Display&family=Manrope:wght@400;600;700&family=Cormorant+Garamond:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+</head>
+
+<body class="kavach-body" data-page="company">
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <header class="dashboard-header" role="banner">
+    <div class="brand">
+      <div class="logo-mark" aria-hidden="true">K</div>
+      <div class="logo-text">
+        <span class="logo-title">KAVACH</span>
+        <span class="logo-subtitle">Company Accountant</span>
+      </div>
+    </div>
+    <nav class="top-tabs" role="navigation" aria-label="Main navigation">
+      <a class="tab-pill" href="/">Home</a>
+      <a class="tab-pill" href="/dashboard">Shield</a>
+      <a class="tab-pill tab-pill-active" href="/company_accountant" aria-current="page">Verify <span class="pro-badge">Pro</span></a>
+      <a class="tab-pill" href="/#pricing">Pricing</a>
+      <a class="tab-pill" href="/#contact">Contact</a>
+    </nav>
+    <div class="header-meta">
+      <label class="theme-label" for="theme-select">Theme</label>
+      <select id="theme-select" class="theme-select" aria-label="Select theme">
+        <option value="aurora-core">Aurora Core</option>
+        <option value="sweet-dark">Sweet Dark</option>
+        <option value="dreamy">Dreamy</option>
+        <option value="solar-copper">Solar Copper</option>
+      </select>
+    </div>
+  </header>
+
+  <main id="main-content" class="dashboard-main" role="main">
+    <section class="upload-panel glass reveal" aria-labelledby="ca-upload-heading">
+      <div class="upload-panel-text">
+        <p class="eyebrow">Company Verification</p>
+        <h2 id="ca-upload-heading">Upload Financial Statements</h2>
+        <p>Upload Excel/CSV with Date, Amount, Category, Vendor, Customer. We’ll produce a CA‑style verification report.</p>
+      </div>
+      <form id="company-upload-form" class="upload-form" enctype="multipart/form-data">
+        <div class="drop-zone" id="company-drop-zone">
+          <input type="file" id="company-file-input" name="file" accept=".xlsx,.xls,.csv" required />
+          <div class="drop-zone-content">
+            <p class="drop-title">Drop file or click to browse</p>
+            <p class="drop-subtitle">Supports Excel/CSV</p>
+            <span class="file-cta">Select File</span>
+          </div>
+          <div class="file-preview" id="company-file-preview" hidden>
+            <div class="file-info">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+              <span class="file-name" id="company-file-name"></span>
+              <span class="file-size" id="company-file-size"></span>
+            </div>
+            <button type="button" class="icon-btn remove-file" id="company-remove-file" aria-label="Remove file">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="upload-actions">
+          <button type="submit" class="primary-btn">Verify Statements</button>
+        </div>
+      </form>
+      <div class="analysis-subtitle" id="company-status">Awaiting upload.</div>
+    </section>
+
+    <section class="kpi-strip" aria-label="Verification summary">
+      <article class="kpi-card glass">
+        <p class="kpi-label">Revenue</p>
+        <p class="kpi-value" id="ca-revenue">—</p>
+      </article>
+      <article class="kpi-card glass">
+        <p class="kpi-label">Expenses</p>
+        <p class="kpi-value" id="ca-expenses">—</p>
+      </article>
+      <article class="kpi-card glass">
+        <p class="kpi-label">Profit</p>
+        <p class="kpi-value" id="ca-profit">—</p>
+      </article>
+      <article class="kpi-card glass">
+        <p class="kpi-label">Verification</p>
+        <p class="kpi-value" id="ca-verified">—</p>
+      </article>
+    </section>
+
+    <section class="grid grid-2 reveal">
+      <div class="card glass">
+        <div class="card-header">
+          <h2>Revenue vs Expenses</h2>
+        </div>
+        <img id="ca-trend" alt="Revenue vs Expense trend" />
+      </div>
+      <div class="card glass">
+        <div class="card-header">
+          <h2>Top Expense Categories</h2>
+        </div>
+        <img id="ca-pie" alt="Expense categories" />
+      </div>
+    </section>
+
+    <section class="grid grid-1 reveal">
+      <div class="card glass">
+        <div class="card-header">
+          <h2>Anomalies</h2>
+        </div>
+        <div class="table-container" tabindex="0" role="region" aria-label="Anomalies">
+          <table class="data-table" id="ca-anomalies">
+            <thead>
+              <tr>
+                <th>Row</th>
+                <th>Field</th>
+                <th>Issue</th>
+                <th>Suggested Fix</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="upload-actions">
+          <button class="ghost-btn" id="download-issues">Download Issues Report</button>
+          <button class="primary-btn" id="download-verified">Download Verified Report</button>
+          <button class="ghost-btn" id="download-pdf">Download PDF</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/company_accountant.js"></script>
+</body>
+</html>

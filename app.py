@@ -25,7 +25,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import RedirectResponse
 import uvicorn
@@ -34,6 +34,7 @@ from features import engineer_transaction_features
 from genai import ask_financial_analyst
 from ingestion import load_transactions_excel
 from insights import build_cluster_insights, build_fraud_table, compute_basic_insights
+from company_accountant import analyze_company_file, build_excel_report, build_pdf_report, CAReport
 from preprocessing import transform_with_artifacts
 
 
@@ -71,6 +72,9 @@ class AppState:
         self.user_profile: Dict[str, Any] | None = None
         self.sample_rows: list[Dict[str, Any]] | None = None
         self.last_upload_path: Path | None = None
+        self.ca_df: pd.DataFrame | None = None
+        self.ca_report: Dict[str, Any] | None = None
+        self.ca_last_upload_path: Path | None = None
 
 
 state = AppState()
@@ -241,6 +245,14 @@ async def dashboard_page() -> HTMLResponse:
     return HTMLResponse(html_path.read_text(encoding="utf-8"))
 
 
+@app.get("/company_accountant", response_class=HTMLResponse)
+async def company_accountant_page() -> HTMLResponse:
+    html_path = FRONTEND_DIR / "company_accountant.html"
+    if not html_path.exists():
+        raise HTTPException(status_code=500, detail="I could not find company_accountant.html.")
+    return HTMLResponse(html_path.read_text(encoding="utf-8"))
+
+
 @app.get("/dashboard_data")
 async def dashboard_data() -> JSONResponse:
     """
@@ -326,7 +338,7 @@ async def dashboard_data() -> JSONResponse:
     tx_records = []
     df_tx = df.copy()
     if "id" not in df_tx.columns:
-        df_tx["id"] = df_tx.index.astype(int)
+        df_tx["id"] = np.arange(len(df_tx))
     for _, row in df_tx[tx_columns].head(200).iterrows():
         rec = {k: row[k] for k in tx_columns if k in row}
         if isinstance(rec.get("timestamp"), pd.Timestamp):
@@ -351,6 +363,94 @@ async def dashboard_data() -> JSONResponse:
             "user_profile": state.user_profile or {},
             "sample_rows": state.sample_rows or [],
         }
+    )
+
+
+@app.post("/company_upload")
+async def company_upload(file: UploadFile = File(...)) -> JSONResponse:
+    if not file.filename.lower().endswith((".xlsx", ".xls", ".csv")):
+        raise HTTPException(status_code=400, detail="Please upload an Excel or CSV file.")
+
+    suffix = Path(file.filename).suffix.lower()
+    tmp_path = DATA_DIR / f"company_upload{suffix}"
+    contents = await file.read()
+    tmp_path.write_bytes(contents)
+
+    try:
+        df, report = analyze_company_file(tmp_path)
+    except Exception:
+        df = pd.DataFrame()
+        report = CAReport(
+            summary={"revenue": 0.0, "expenses": 0.0, "profit": 0.0},
+            monthly_trends=[],
+            category_totals=[],
+            anomalies=[{"row": "N/A", "field": "file", "issue": "Unreadable file", "suggestion": "Re-upload a valid sheet"}],
+            charts={},
+            verified=False,
+        )
+
+    state.ca_df = df
+    state.ca_report = {
+        "summary": report.summary,
+        "monthly_trends": report.monthly_trends,
+        "category_totals": report.category_totals,
+        "anomalies": report.anomalies,
+        "charts": report.charts,
+        "verified": report.verified,
+    }
+    state.ca_last_upload_path = tmp_path
+
+    return JSONResponse({"status": "ok"})
+
+
+@app.get("/company_report")
+async def company_report() -> JSONResponse:
+    if state.ca_report is None:
+        raise HTTPException(status_code=400, detail="Please upload a company file first.")
+    return JSONResponse(state.ca_report)
+
+
+@app.get("/company_report_excel")
+async def company_report_excel(verified: bool = False) -> Response:
+    if state.ca_df is None or state.ca_report is None:
+        raise HTTPException(status_code=400, detail="Please upload a company file first.")
+    try:
+        report_obj = CAReport(
+            summary=state.ca_report["summary"],
+            monthly_trends=state.ca_report["monthly_trends"],
+            category_totals=state.ca_report["category_totals"],
+            anomalies=state.ca_report["anomalies"],
+            charts=state.ca_report["charts"],
+            verified=state.ca_report["verified"],
+        )
+        content = build_excel_report(state.ca_df, report_obj, verified_only=verified)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=kavach-company-report.xlsx"},
+    )
+
+
+@app.get("/company_report_pdf")
+async def company_report_pdf() -> Response:
+    if state.ca_report is None:
+        raise HTTPException(status_code=400, detail="Please upload a company file first.")
+    report_obj = CAReport(
+        summary=state.ca_report["summary"],
+        monthly_trends=state.ca_report["monthly_trends"],
+        category_totals=state.ca_report["category_totals"],
+        anomalies=state.ca_report["anomalies"],
+        charts=state.ca_report["charts"],
+        verified=state.ca_report["verified"],
+    )
+    content = build_pdf_report(report_obj)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=kavach-company-report.pdf"},
     )
 
 

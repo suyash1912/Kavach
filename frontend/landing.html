@@ -14,10 +14,11 @@
   <link rel="preload" href="/static/style.css" as="style" />
   
   <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@600;700&family=Nunito:wght@400;600;700&family=DM+Serif+Display&family=Manrope:wght@400;600;700&family=Cormorant+Garamond:wght@600;700&display=swap" rel="stylesheet" />
   
   <!-- Styles -->
   <link rel="stylesheet" href="/static/style.css" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
 </head>
 
 <body class="kavach-body marketing-body" data-page="landing">
@@ -35,14 +36,24 @@
     </div>
     
     <nav class="top-tabs" role="navigation" aria-label="Main">
-      <a class="tab-pill" href="/dashboard">Launch App</a>
-      <a class="tab-pill" href="#features">Features</a>
-      <a class="tab-pill" href="#how-it-works">How it Works</a>
+      <a class="tab-pill" href="/">Home</a>
+      <a class="tab-pill" href="/dashboard">Shield</a>
+      <a class="tab-pill" href="/company_accountant">Verify <span class="pro-badge">Pro</span></a>
       <a class="tab-pill" href="#pricing">Pricing</a>
+      <a class="tab-pill" href="#contact">Contact</a>
     </nav>
     
     <div class="header-cta">
       <a href="/dashboard" class="primary-btn btn-sm">Get Started Free</a>
+    </div>
+    <div class="header-meta">
+      <label class="theme-label" for="theme-select">Theme</label>
+      <select id="theme-select" class="theme-select" aria-label="Select theme">
+        <option value="aurora-core">Aurora Core</option>
+        <option value="sweet-dark">Sweet Dark</option>
+        <option value="dreamy">Dreamy</option>
+        <option value="solar-copper">Solar Copper</option>
+      </select>
     </div>
   </header>
 
@@ -72,12 +83,6 @@
               <polyline points="12 5 19 12 12 19"/>
             </svg>
           </a>
-          <button class="ghost-btn btn-lg" id="watch-demo">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="5 3 19 12 5 21 5 3"/>
-            </svg>
-            Watch Demo
-          </button>
         </div>
         
         <div class="trust-bar">
@@ -450,6 +455,47 @@
       </div>
     </section>
 
+    <!-- Contact Section -->
+    <section class="section contact-section" id="contact" aria-labelledby="contact-heading">
+      <div class="section-head">
+        <span class="eyebrow">Contact</span>
+        <h2 id="contact-heading">Talk to the KAVACH team</h2>
+        <p>We’ll help you set up an audit flow that fits your company size and compliance needs.</p>
+      </div>
+      <div class="contact-grid">
+        <div class="contact-card glass">
+          <h3>Sales & Verification</h3>
+          <p>Get a tailored walkthrough of the Shield and Verify modules.</p>
+          <ul class="contact-list">
+            <li>Response within 24 hours</li>
+            <li>Compliance checklist included</li>
+            <li>Dedicated onboarding</li>
+          </ul>
+        </div>
+        <form class="contact-form glass">
+          <label class="input-field">
+            <span>Name</span>
+            <input type="text" placeholder="Your name" />
+          </label>
+          <label class="input-field">
+            <span>Email</span>
+            <input type="email" placeholder="you@company.com" />
+          </label>
+          <label class="input-field">
+            <span>Company</span>
+            <input type="text" placeholder="Company name" />
+          </label>
+          <label class="input-field">
+            <span>Message</span>
+            <textarea rows="4" placeholder="Tell us what you need"></textarea>
+          </label>
+          <div class="contact-actions">
+            <button type="button" class="primary-btn btn-full">Send Request</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
     <!-- Footer -->
     <footer class="landing-footer">
       <div class="footer-grid">
@@ -507,17 +553,6 @@
       </div>
     </footer>
   </main>
-
-  <!-- Demo Modal -->
-  <dialog id="demo-modal" class="modal glass">
-    <div class="modal-content">
-      <h3>Watch KAVACH in Action</h3>
-      <div class="video-placeholder">
-        <p>Demo video coming soon</p>
-      </div>
-      <button class="modal-close" aria-label="Close modal">&times;</button>
-    </div>
-  </dialog>
 
   <!-- Demo Notice Modal -->
   <dialog id="notice-modal" class="modal glass">

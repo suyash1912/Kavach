@@ -12,6 +12,7 @@
 
   // Initialize when DOM is ready
   document.addEventListener('DOMContentLoaded', () => {
+    applyStoredTheme();
     requestAnimationFrame(() => document.body.classList.add('landing-ready'));
     initHeroAnimations();
     initTabs();
@@ -19,6 +20,7 @@
     initModals();
     initCounters();
     initScrollAnimations();
+    initThemePicker();
   });
 
   /**
@@ -172,9 +174,7 @@
    * Modal dialogs
    */
   function initModals() {
-    const demoModal = $('#demo-modal');
     const noticeModal = $('#notice-modal');
-    const watchDemoBtn = $('#watch-demo');
     const demoNoticeBtn = $('#demo-notice');
     const contactSalesBtn = $('#contact-sales');
     const scheduleDemoBtn = $('#schedule-demo');
@@ -199,7 +199,6 @@
     };
 
     // Event listeners
-    if (watchDemoBtn) watchDemoBtn.addEventListener('click', () => openModal(demoModal));
     if (demoNoticeBtn) demoNoticeBtn.addEventListener('click', () => openModal(noticeModal));
     if (contactSalesBtn) contactSalesBtn.addEventListener('click', () => openModal(noticeModal));
     if (scheduleDemoBtn) scheduleDemoBtn.addEventListener('click', () => openModal(noticeModal));
@@ -213,7 +212,7 @@
     });
 
     // Close on backdrop click
-    [demoModal, noticeModal].forEach((modal) => {
+    [noticeModal].forEach((modal) => {
       if (!modal) return;
       modal.addEventListener('click', (e) => {
         if (e.target === modal) {
@@ -312,4 +311,22 @@
   // Expose utilities globally if needed
   window.KAVACH = window.KAVACH || {};
   window.KAVACH.debounce = debounce;
+
+  function applyStoredTheme() {
+    const theme = localStorage.getItem('kavach_theme') || 'aurora-core';
+    const valid = new Set(['aurora-core', 'sweet-dark', 'dreamy', 'solar-copper']);
+    document.body.setAttribute('data-theme', valid.has(theme) ? theme : 'aurora-core');
+  }
+
+  function initThemePicker() {
+    const picker = document.querySelector('#theme-select');
+    if (!picker) return;
+    const theme = localStorage.getItem('kavach_theme') || 'aurora-core';
+    picker.value = theme;
+    picker.addEventListener('change', (e) => {
+      const value = e.target.value;
+      localStorage.setItem('kavach_theme', value);
+      document.body.setAttribute('data-theme', value);
+    });
+  }
 })();

@@ -13,14 +13,20 @@ const Store = {
   data: {
     transactions: [],
     insights: {},
+    categoryChart: { labels: [], values: [] },
+    monthlyTrends: [],
     userProfile: {},
+    sampleRows: [],
     aiHistory: [],
     ui: {
       darkMode: true,
       sidebarCollapsed: false,
       chartType: 'doughnut',
       currentPage: 1,
-      pageSize: 25
+      pageSize: 25,
+      timeRange: 'all',
+      riskThreshold: 0.6,
+      showAdvanced: false
     }
   },
   
@@ -469,7 +475,12 @@ class TransactionTable extends DataTable {
     const riskLevel = this.computeRiskLevel(tx.fraud_score);
     
     const cells = [
-      DOM.create('td', {}, [tx.user_id]),
+      DOM.create('td', {}, [
+        DOM.create('button', {
+          className: 'user-link',
+          onclick: () => Dashboard.openUserDrawer(tx.user_id)
+        }, [tx.user_id])
+      ]),
       DOM.create('td', {}, [this.formatDate(tx.timestamp)]),
       DOM.create('td', { className: 'numeric' }, [this.formatCurrency(tx.amount)]),
       DOM.create('td', {}, [tx.category]),
@@ -477,7 +488,10 @@ class TransactionTable extends DataTable {
       DOM.create('td', {}, [tx.country]),
       DOM.create('td', { className: 'numeric' }, [(tx.fraud_score || 0).toFixed(2)]),
       DOM.create('td', {}, [
-        DOM.create('span', { className: `risk-badge ${riskLevel.class}` }, [riskLevel.label])
+        DOM.create('span', {
+          className: `risk-badge ${riskLevel.class}`,
+          title: `Score ${(tx.fraud_score || 0).toFixed(2)} • Signals: ${tx.rule_based_fraud_flag ? 'Rules' : ''}${tx.model_fraud_flag ? ' Model' : ''}${tx.velocity_flag ? ' Velocity' : ''}`.trim()
+        }, [riskLevel.label])
       ])
     ];
     
@@ -524,13 +538,21 @@ class FraudTable extends DataTable {
     ].filter(Boolean).join(' + ') || 'None';
     
     const cells = [
-      DOM.create('td', {}, [tx.user_id]),
+      DOM.create('td', {}, [
+        DOM.create('button', {
+          className: 'user-link',
+          onclick: () => Dashboard.openUserDrawer(tx.user_id)
+        }, [tx.user_id])
+      ]),
       DOM.create('td', { className: 'numeric' }, [this.formatCurrency(tx.amount)]),
       DOM.create('td', {}, [tx.country]),
       DOM.create('td', { className: 'numeric' }, [(tx.fraud_score || 0).toFixed(2)]),
       DOM.create('td', {}, [signals]),
       DOM.create('td', {}, [
-        DOM.create('span', { className: `risk-badge ${riskLevel.class}${riskLevel.class === 'risk-high' ? ' risk-pulse' : ''}` }, [riskLevel.label])
+        DOM.create('span', {
+          className: `risk-badge ${riskLevel.class}${riskLevel.class === 'risk-high' ? ' risk-pulse' : ''}`,
+          title: `Score ${(tx.fraud_score || 0).toFixed(2)} • ${signals}`
+        }, [riskLevel.label])
       ]),
       DOM.create('td', {}, [
         DOM.create('button', {
@@ -655,6 +677,57 @@ class FraudTable extends DataTable {
 const ChartManager = {
   instances: {},
 
+  themePalette() {
+    const theme = document.body.getAttribute('data-theme') || 'kavach';
+    if (theme === 'solar-copper') {
+      return {
+        primary: '#ff9f1c',
+        secondary: '#c36f09',
+        accent: '#f6b26b',
+        riskHigh: '#ff6b35',
+        riskMed: '#f4a261',
+        riskLow: '#e0a96d'
+      };
+    }
+    if (theme === 'aurora-core') {
+      return {
+        primary: '#4fd1ff',
+        secondary: '#7c9cff',
+        accent: '#79f2c0',
+        riskHigh: '#ff6ad5',
+        riskMed: '#7c9cff',
+        riskLow: '#79f2c0'
+      };
+    }
+    if (theme === 'sweet-dark') {
+      return {
+        primary: '#ec4899',
+        secondary: '#7c3aed',
+        accent: '#f59e0b',
+        riskHigh: '#f43f5e',
+        riskMed: '#fbbf24',
+        riskLow: '#22c55e'
+      };
+    }
+    if (theme === 'dreamy') {
+      return {
+        primary: '#c49362',
+        secondary: '#8b5a3c',
+        accent: '#b07a4f',
+        riskHigh: '#9b4a32',
+        riskMed: '#c07a4a',
+        riskLow: '#8a6a54'
+      };
+    }
+    return {
+      primary: '#2dd4bf',
+      secondary: '#38bdf8',
+      accent: '#fbbf24',
+      riskHigh: '#f43f5e',
+      riskMed: '#fbbf24',
+      riskLow: '#22c55e'
+    };
+  },
   pulseCanvas(canvasId) {
     const canvas = DOM.$(`#${canvasId}`);
     const wrapper = canvas?.closest('.chart-wrapper');
@@ -669,18 +742,19 @@ const ChartManager = {
   createCategoryChart(canvasId, data, type = 'doughnut') {
     const ctx = DOM.$(`#${canvasId}`)?.getContext('2d');
     if (!ctx) return;
-    
+
+    const palette = this.themePalette();
     if (this.instances[canvasId]) {
       this.instances[canvasId].destroy();
     }
-    
+
     const gradient1 = ctx.createLinearGradient(0, 0, 200, 200);
-    gradient1.addColorStop(0, '#2dd4bf');
-    gradient1.addColorStop(1, '#38bdf8');
-    
+    gradient1.addColorStop(0, palette.primary);
+    gradient1.addColorStop(1, palette.secondary);
+
     const gradient2 = ctx.createLinearGradient(0, 0, 200, 200);
-    gradient2.addColorStop(0, '#fbbf24');
-    gradient2.addColorStop(1, '#f97316');
+    gradient2.addColorStop(0, palette.accent);
+    gradient2.addColorStop(1, palette.riskHigh);
     
     this.instances[canvasId] = new Chart(ctx, {
       type: type,
@@ -688,7 +762,7 @@ const ChartManager = {
         labels: data.labels || [],
         datasets: [{
           data: data.values || [],
-          backgroundColor: [gradient1, gradient2, '#a78bfa', '#4ade80', '#f472b6'],
+          backgroundColor: [gradient1, gradient2, palette.secondary, palette.riskLow, palette.riskHigh],
           borderColor: 'rgba(12, 18, 36, 0.9)',
           borderWidth: 2,
           hoverOffset: 10
@@ -741,14 +815,15 @@ const ChartManager = {
   createTrendChart(canvasId, data) {
     const ctx = DOM.$(`#${canvasId}`)?.getContext('2d');
     if (!ctx) return;
-    
+
+    const palette = this.themePalette();
     if (this.instances[canvasId]) {
       this.instances[canvasId].destroy();
     }
-    
+
     const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-    gradient.addColorStop(0, 'rgba(34, 197, 94, 0.3)');
-    gradient.addColorStop(1, 'rgba(34, 197, 94, 0)');
+    gradient.addColorStop(0, `${palette.riskLow}55`);
+    gradient.addColorStop(1, `${palette.riskLow}00`);
     
     this.instances[canvasId] = new Chart(ctx, {
       type: 'line',
@@ -757,12 +832,12 @@ const ChartManager = {
         datasets: [{
           label: 'Transaction Volume',
           data: data.map(d => d.total_spend),
-          borderColor: '#22c55e',
+          borderColor: palette.riskLow,
           backgroundColor: gradient,
           borderWidth: 3,
           tension: 0.4,
           fill: true,
-          pointBackgroundColor: '#22c55e',
+          pointBackgroundColor: palette.riskLow,
           pointBorderColor: '#0b1020',
           pointBorderWidth: 2,
           pointRadius: 4,
@@ -833,8 +908,8 @@ const ChartManager = {
     const counts = labels.map(l => byDay.get(l));
 
     const gradient = ctx.createLinearGradient(0, 0, 0, 200);
-    gradient.addColorStop(0, 'rgba(56, 189, 248, 0.35)');
-    gradient.addColorStop(1, 'rgba(56, 189, 248, 0)');
+    gradient.addColorStop(0, `${palette.primary}55`);
+    gradient.addColorStop(1, `${palette.primary}00`);
 
     this.instances[canvasId] = new Chart(ctx, {
       type: 'line',
@@ -843,7 +918,7 @@ const ChartManager = {
         datasets: [{
           label: 'Transactions / day',
           data: counts,
-          borderColor: '#38bdf8',
+          borderColor: palette.primary,
           backgroundColor: gradient,
           borderWidth: 2.5,
           tension: 0.35,
@@ -890,7 +965,7 @@ const ChartManager = {
       marker: {
         size: 5,
         color: points.map(p => parseFloat(p.fraud_score) || 0),
-        colorscale: [[0, '#22c55e'], [0.5, '#fbbf24'], [1, '#f43f5e']],
+        colorscale: [[0, palette.riskLow], [0.5, palette.riskMed], [1, palette.riskHigh]],
         opacity: 0.8,
         line: { color: 'rgba(0,0,0,0.3)', width: 1 }
       },
@@ -971,7 +1046,7 @@ const ChartManager = {
       marker: {
         size: counts.map(v => Math.max(6, Math.min(20, v))),
         color: risks,
-        colorscale: [[0, '#22c55e'], [0.5, '#fbbf24'], [1, '#f43f5e']],
+        colorscale: [[0, palette.riskLow], [0.5, palette.riskMed], [1, palette.riskHigh]],
         opacity: 0.85,
         line: { color: 'rgba(0,0,0,0.3)', width: 1 }
       }
@@ -1010,6 +1085,28 @@ const ChartManager = {
 };
 
 // ==========================================
+// Theme Manager
+// ==========================================
+
+const ThemeManager = {
+  key: 'kavach_theme',
+  valid: new Set(['aurora-core', 'sweet-dark', 'dreamy', 'solar-copper']),
+
+  init() {
+    const saved = localStorage.getItem(this.key) || 'aurora-core';
+    this.applyTheme(saved);
+    const select = DOM.$('#theme-select');
+    if (select) select.value = localStorage.getItem(this.key) || 'aurora-core';
+  },
+
+  applyTheme(theme) {
+    const selected = this.valid.has(theme) ? theme : 'aurora-core';
+    document.body.setAttribute('data-theme', selected);
+    localStorage.setItem(this.key, selected);
+  }
+};
+
+// ==========================================
 // Case Manager
 // ==========================================
 
@@ -1044,6 +1141,9 @@ const CaseManager = {
       country: tx.country || 'Unknown',
       fraud_score: tx.fraud_score || 0,
       status: 'open',
+      history: [
+        { at: new Date().toISOString(), label: 'Case created' }
+      ],
       created_at: new Date().toISOString()
     };
     this.cases.unshift(newCase);
@@ -1056,6 +1156,8 @@ const CaseManager = {
     const item = this.cases.find(c => c.id === id);
     if (!item) return;
     item.status = status;
+    item.history = item.history || [];
+    item.history.unshift({ at: new Date().toISOString(), label: `Status set to ${status}` });
     this.save();
     this.render();
   },
@@ -1090,6 +1192,9 @@ const CaseManager = {
             <option value="escalated" ${c.status === 'escalated' ? 'selected' : ''}>Escalated</option>
             <option value="closed" ${c.status === 'closed' ? 'selected' : ''}>Closed</option>
           </select>
+        </div>
+        <div class="case-log">
+          ${(c.history || []).slice(0, 2).map(h => `<span>${new Date(h.at).toLocaleString()}: ${h.label}</span>`).join('')}
         </div>
       </div>
     `).join('');
@@ -1505,10 +1610,12 @@ const Dashboard = {
     AIChat.init();
     CaseManager.load();
     CaseManager.render();
+    ThemeManager.init();
     
     // Initialize tables before data load so hydration can populate them.
     this.initTables();
     this.showSkeletons();
+    this.applyAdvancedVisibility();
     
     // Check if we have data
     await this.loadData();
@@ -1535,9 +1642,12 @@ const Dashboard = {
       const data = await response.json();
       Store.set('transactions', data.transactions || []);
       Store.set('insights', data.insights || {});
+      Store.set('categoryChart', data.category_chart || { labels: [], values: [] });
+      Store.set('monthlyTrends', data.monthly_trends || []);
       Store.set('userProfile', data.user_profile || {});
+      Store.set('sampleRows', data.sample_rows || []);
       
-      this.hydrateDashboard(data);
+    this.hydrateDashboard(data);
       
     } catch (error) {
       console.error('Dashboard load error:', error);
@@ -1550,19 +1660,25 @@ const Dashboard = {
     const { insights, transactions, fraud_table, user_profile, sample_rows } = data;
     this.hideSkeletons();
     this.buildStats(transactions || []);
+    this.updateEmptyCoach(transactions || []);
+
+    const filtered = this.filterByTimeRange(transactions || []);
     
     // KPIs
-    const totalSpend = insights?.total_spend || 0;
+    const totalSpend = (filtered || []).reduce((sum, tx) => sum + parseFloat(tx.amount || 0), 0);
     const topCat = insights?.top_categories?.[0];
     let fraudRows = fraud_table || [];
-    if (fraudRows.length === 0 && Array.isArray(transactions)) {
-      fraudRows = transactions.filter(tx => tx.rule_based_fraud_flag || tx.model_fraud_flag);
+    if (fraudRows.length === 0 && Array.isArray(filtered)) {
+      fraudRows = filtered.filter(tx => tx.rule_based_fraud_flag || tx.model_fraud_flag);
     }
     const highRisk = fraudRows.filter(r => (r.fraud_score || 0) > 0.75).length;
     const medRisk = fraudRows.filter(r => {
       const s = r.fraud_score || 0;
       return s > 0.4 && s <= 0.75;
     }).length;
+
+    const threshold = Store.get('ui.riskThreshold') || 0.6;
+    const thresholdRows = (filtered || []).filter(tx => parseFloat(tx.fraud_score || 0) >= threshold);
     
     // Animate KPIs
     setTimeout(() => {
@@ -1573,17 +1689,30 @@ const Dashboard = {
       if (catEl) catEl.textContent = topCat?.category || '—';
       
       const riskEl = DOM.$('#kpi-risk-count');
-      if (riskEl) KPIAnimation.animateValue(riskEl, 0, highRisk + medRisk, 1000);
+      if (riskEl) KPIAnimation.animateValue(riskEl, 0, thresholdRows.length, 1000);
       
-      DOM.$('#kpi-tx-count').textContent = transactions?.length || 0;
+      DOM.$('#kpi-tx-count').textContent = filtered?.length || 0;
       DOM.$('#high-risk-count').textContent = highRisk;
       DOM.$('#med-risk-count').textContent = medRisk;
+
+      const topAnomaly = thresholdRows.sort((a, b) => (b.fraud_score || 0) - (a.fraud_score || 0))[0];
+      const topEl = DOM.$('#kpi-top-anomaly');
+      const topDetail = DOM.$('#kpi-top-anomaly-detail');
+      if (topEl) topEl.textContent = topAnomaly ? `${topAnomaly.user_id}` : '—';
+      if (topDetail) topDetail.textContent = topAnomaly
+        ? `${this.formatCurrency(topAnomaly.amount)} • Score ${(topAnomaly.fraud_score || 0).toFixed(2)}`
+        : '—';
       
       // Animate bars
       DOM.$('#kpi-bar-total').style.width = '75%';
       DOM.$('#kpi-bar-category').style.width = topCat ? '60%' : '0%';
-      DOM.$('#kpi-bar-risk').style.width = Math.min(90, (highRisk + medRisk) * 10) + '%';
+      DOM.$('#kpi-bar-risk').style.width = Math.min(90, thresholdRows.length * 10) + '%';
     }, 300);
+
+    const thresholdInput = DOM.$('#risk-global-threshold');
+    const thresholdLabel = DOM.$('#risk-threshold-value');
+    if (thresholdInput) thresholdInput.value = String(threshold);
+    if (thresholdLabel) thresholdLabel.textContent = threshold.toFixed(2);
     
     // Update titles
     const name = user_profile?.name || 'you';
@@ -1591,14 +1720,14 @@ const Dashboard = {
     DOM.$('#analysis-title').textContent = `Analysis for ${name}`;
     DOM.$('#analysis-subtitle').textContent = `Dataset: ${sheetType}`;
     DOM.$('#tx-header').textContent = `Transactions: ${sheetType}`;
-    DOM.$('#tx-subheader').textContent = `${transactions?.length || 0} records analyzed`;
+    DOM.$('#tx-subheader').textContent = `${filtered?.length || 0} records analyzed`;
     
     // Populate tables
     if (this.tables.transactions) {
-      this.tables.transactions.setData(transactions || []);
+      this.tables.transactions.setData(filtered || []);
     }
     if (this.tables.fraud) {
-      this.tables.fraud.setData(fraudRows);
+      this.tables.fraud.setData(thresholdRows);
     }
     this.tables.fraud?.filter(() => true);
     this.pulseRiskBadge(highRisk + medRisk);
@@ -1607,15 +1736,16 @@ const Dashboard = {
     this.renderSampleTable(sample_rows || []);
     
     // Charts
-    this.initCharts(data);
-    this.initSimulator(transactions || []);
-    this.initComparator(transactions || []);
-    this.renderHeatmap(transactions || []);
+    this.initCharts({ ...data, transactions: filtered });
+    this.initSimulator(filtered || []);
+    this.initComparator(filtered || []);
+    this.renderHeatmap(filtered || []);
+    this.initPitchFeatures(filtered || []);
     
     // 3D Viz
-    if (transactions?.length > 0) {
+    if (filtered?.length > 0) {
       setTimeout(() => {
-        ChartManager.createPlotly3D('plotly-3d', transactions);
+        ChartManager.createPlotly3D('plotly-3d', filtered);
         this.togglePlotlyOrbit();
       }, 500);
     }
@@ -1642,6 +1772,24 @@ const Dashboard = {
     DOM.$('#tx-search')?.addEventListener('input', DOM.debounce((e) => {
       this.tables.transactions.search(e.target.value);
     }, 300));
+  },
+
+  updateEmptyCoach(transactions) {
+    const coach = DOM.$('#empty-coach');
+    if (!coach) return;
+    coach.style.display = transactions.length ? 'none' : 'block';
+  },
+
+  filterByTimeRange(transactions) {
+    const range = Store.get('ui.timeRange') || 'all';
+    if (range === 'all') return transactions;
+    const now = new Date();
+    const days = parseInt(range.replace('d', ''), 10);
+    const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    return transactions.filter(tx => {
+      const ts = tx.timestamp ? new Date(tx.timestamp) : null;
+      return ts && !Number.isNaN(ts.getTime()) && ts >= cutoff;
+    });
   },
 
   buildStats(transactions) {
@@ -1728,6 +1876,58 @@ const Dashboard = {
     `;
 
     chips.innerHTML = drivers.map(d => `<span class="explain-chip">${d}</span>`).join('');
+  },
+
+  openUserDrawer(userId) {
+    if (!userId) return;
+    const drawer = DOM.$('#user-drawer');
+    const backdrop = DOM.$('#drawer-backdrop');
+    const title = DOM.$('#drawer-title');
+    const body = DOM.$('#drawer-body');
+    if (!drawer || !title || !body) return;
+
+    const transactions = Store.get('transactions') || [];
+    const subset = transactions.filter(tx => tx.user_id === userId);
+    const total = subset.reduce((sum, tx) => sum + parseFloat(tx.amount || 0), 0);
+    const avg = subset.length ? total / subset.length : 0;
+    const avgRisk = subset.reduce((sum, tx) => sum + parseFloat(tx.fraud_score || 0), 0) / Math.max(subset.length, 1);
+    const topMerchant = subset.reduce((acc, tx) => {
+      const m = tx.merchant || 'Unknown';
+      acc[m] = (acc[m] || 0) + 1;
+      return acc;
+    }, {});
+    const topMerchantName = Object.entries(topMerchant).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
+
+    title.textContent = `User 360 • ${userId}`;
+    body.innerHTML = `
+      <div class="drawer-card">
+        <div class="detail-label">Total Spend</div>
+        <div class="detail-value">${this.formatCurrency(total)}</div>
+      </div>
+      <div class="drawer-card">
+        <div class="detail-label">Average Transaction</div>
+        <div class="detail-value">${this.formatCurrency(avg)}</div>
+      </div>
+      <div class="drawer-card">
+        <div class="detail-label">Average Risk</div>
+        <div class="detail-value">${avgRisk.toFixed(2)}</div>
+      </div>
+      <div class="drawer-card">
+        <div class="detail-label">Top Merchant</div>
+        <div class="detail-value">${topMerchantName}</div>
+      </div>
+      <div class="drawer-card">
+        <div class="detail-label">Transactions</div>
+        <div class="detail-value">${subset.length}</div>
+      </div>
+    `;
+
+    drawer.classList.add('open');
+    drawer.setAttribute('aria-hidden', 'false');
+    if (backdrop) {
+      backdrop.classList.add('active');
+      backdrop.setAttribute('aria-hidden', 'false');
+    }
   },
 
   renderHeatmap(transactions) {
@@ -1861,6 +2061,171 @@ const Dashboard = {
 
     btn.addEventListener('click', render);
     render();
+  },
+
+  initPitchFeatures(transactions) {
+    this.renderCfoSnapshot(transactions);
+    this.renderPersonas(transactions);
+    this.bindMovieControls(transactions);
+    this.bindCounterfactual(transactions);
+    this.bindRedTeam();
+  },
+
+  renderCfoSnapshot(transactions) {
+    const container = DOM.$('#cfo-snapshot');
+    if (!container) return;
+    const total = transactions.reduce((sum, tx) => sum + parseFloat(tx.amount || 0), 0);
+    const flagged = transactions.filter(tx => (tx.fraud_score || 0) >= (Store.get('ui.riskThreshold') || 0.6)).length;
+    const avgRisk = transactions.reduce((sum, tx) => sum + parseFloat(tx.fraud_score || 0), 0) / Math.max(transactions.length, 1);
+    const topCountry = this.topKey(transactions.map(tx => tx.country || 'Unknown'));
+    const topCategory = this.topKey(transactions.map(tx => tx.category || 'Unknown'));
+
+    container.innerHTML = `
+      <div class="snapshot-card">
+        <div class="snapshot-title">Total Exposure</div>
+        <div class="snapshot-value">${this.formatCurrency(total)}</div>
+      </div>
+      <div class="snapshot-card">
+        <div class="snapshot-title">Flagged Count</div>
+        <div class="snapshot-value">${flagged}</div>
+      </div>
+      <div class="snapshot-card">
+        <div class="snapshot-title">Average Risk</div>
+        <div class="snapshot-value">${avgRisk.toFixed(2)}</div>
+      </div>
+      <div class="snapshot-card">
+        <div class="snapshot-title">Top Country</div>
+        <div class="snapshot-value">${topCountry}</div>
+      </div>
+      <div class="snapshot-card">
+        <div class="snapshot-title">Top Category</div>
+        <div class="snapshot-value">${topCategory}</div>
+      </div>
+    `;
+  },
+
+  renderPersonas(transactions) {
+    const container = DOM.$('#persona-grid');
+    if (!container) return;
+    const byUser = new Map();
+    transactions.forEach(tx => {
+      const user = tx.user_id || 'Unknown';
+      const entry = byUser.get(user) || { count: 0, sum: 0, risk: 0 };
+      entry.count += 1;
+      entry.sum += parseFloat(tx.amount || 0);
+      entry.risk += parseFloat(tx.fraud_score || 0);
+      byUser.set(user, entry);
+    });
+
+    const personas = [
+      { name: 'High‑Velocity Spenders', test: u => u.count >= 10 },
+      { name: 'High‑Risk Outliers', test: u => u.risk / Math.max(u.count, 1) > 0.7 },
+      { name: 'Steady Regulars', test: u => u.count >= 5 && (u.risk / Math.max(u.count, 1)) < 0.3 }
+    ];
+
+    const stats = personas.map(p => {
+      const users = Array.from(byUser.values()).filter(p.test);
+      return { name: p.name, count: users.length };
+    });
+
+    container.innerHTML = stats.map(s => `
+      <div class="persona-card">
+        <div class="persona-name">${s.name}</div>
+        <div class="analysis-subtitle">${s.count} users</div>
+      </div>
+    `).join('');
+  },
+
+  bindMovieControls(transactions) {
+    const play = DOM.$('#movie-play');
+    const pause = DOM.$('#movie-pause');
+    const stage = DOM.$('#movie-stage');
+    const progress = DOM.$('#movie-progress');
+    if (!play || !pause || !stage || !progress) return;
+
+    let index = 0;
+    let timer = null;
+
+    const steps = this.buildMovieSteps(transactions);
+    const renderStep = () => {
+      const step = steps[index];
+      if (!step) return;
+      stage.innerHTML = `<strong>${step.title}</strong><p>${step.body}</p>`;
+      progress.textContent = `${Math.round((index + 1) / steps.length * 100)}%`;
+      index = (index + 1) % steps.length;
+    };
+
+    play.onclick = () => {
+      if (timer) return;
+      renderStep();
+      timer = setInterval(renderStep, 2000);
+    };
+
+    pause.onclick = () => {
+      clearInterval(timer);
+      timer = null;
+    };
+  },
+
+  buildMovieSteps(transactions) {
+    if (!transactions.length) {
+      return [{ title: 'No data', body: 'Upload a file to replay anomalies.' }];
+    }
+    const top = transactions.sort((a, b) => (b.fraud_score || 0) - (a.fraud_score || 0)).slice(0, 3);
+    return [
+      { title: 'Scan started', body: `Analyzed ${transactions.length} transactions.` },
+      ...top.map((t, i) => ({
+        title: `Anomaly #${i + 1}`,
+        body: `User ${t.user_id} • ${this.formatCurrency(t.amount)} • Score ${(t.fraud_score || 0).toFixed(2)}`
+      })),
+      { title: 'Action', body: 'Open cases for high‑risk events.' }
+    ];
+  },
+
+  bindCounterfactual(transactions) {
+    const toggle = DOM.$('#cf-country');
+    const slider = DOM.$('#cf-amount');
+    const output = DOM.$('#cf-output');
+    if (!toggle || !slider || !output) return;
+
+    const compute = () => {
+      const reduceBy = parseFloat(slider.value) / 100;
+      const ignoreCountry = toggle.checked;
+      const threshold = Store.get('ui.riskThreshold') || 0.6;
+      const estimated = transactions.filter(tx => {
+        let score = parseFloat(tx.fraud_score || 0);
+        if (ignoreCountry && tx.country_changed) score -= 0.1;
+        const reducedAmount = parseFloat(tx.amount || 0) * (1 - reduceBy);
+        if (reducedAmount < parseFloat(tx.amount || 0) * 0.7) score -= 0.05;
+        return score >= threshold;
+      }).length;
+      output.textContent = `Estimated flagged count: ${estimated}`;
+    };
+
+    toggle.addEventListener('change', compute);
+    slider.addEventListener('input', compute);
+    compute();
+  },
+
+  bindRedTeam() {
+    const v = DOM.$('#rt-velocity');
+    const g = DOM.$('#rt-geo');
+    const a = DOM.$('#rt-amount');
+    const btn = DOM.$('#rt-evaluate');
+    const result = DOM.$('#rt-result');
+    if (!v || !g || !a || !btn || !result) return;
+
+    btn.addEventListener('click', () => {
+      const risk = (parseInt(v.value, 10) * 0.1) + (parseInt(g.value, 10) * 0.2) + (parseInt(a.value, 10) * 0.1);
+      const status = risk > 2 ? 'Detected' : 'Likely to evade';
+      result.textContent = `Risk engine result: ${status} (score ${risk.toFixed(2)})`;
+    });
+  },
+
+  topKey(list) {
+    const map = new Map();
+    list.forEach(v => map.set(v, (map.get(v) || 0) + 1));
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
   },
 
   formatCurrency(amount) {
@@ -2017,6 +2382,38 @@ const Dashboard = {
     DOM.$('#export-analysis')?.addEventListener('click', () => this.exportReport());
     DOM.$('#export-risk')?.addEventListener('click', () => this.exportFlaggedPdf());
     DOM.$('#export-all')?.addEventListener('click', () => this.exportTable('transactions'));
+    DOM.$('#risk-global-threshold')?.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      Store.set('ui.riskThreshold', val);
+      const label = DOM.$('#risk-threshold-value');
+      if (label) label.textContent = val.toFixed(2);
+      this.hydrateDashboard({
+        insights: Store.get('insights'),
+        category_chart: Store.get('categoryChart'),
+        monthly_trends: Store.get('monthlyTrends'),
+        transactions: Store.get('transactions'),
+        fraud_table: [],
+        user_profile: Store.get('userProfile'),
+        sample_rows: Store.get('sampleRows') || []
+      });
+    });
+
+    DOM.$('#time-range-group')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.time-range');
+      if (!btn) return;
+      DOM.$$('#time-range-group .time-range').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      Store.set('ui.timeRange', btn.dataset.range);
+      this.hydrateDashboard({
+        insights: Store.get('insights'),
+        category_chart: Store.get('categoryChart'),
+        monthly_trends: Store.get('monthlyTrends'),
+        transactions: Store.get('transactions'),
+        fraud_table: [],
+        user_profile: Store.get('userProfile'),
+        sample_rows: Store.get('sampleRows') || []
+      });
+    });
     DOM.$('#case-clear')?.addEventListener('click', () => {
       CaseManager.clearAll();
       Toast.show('Cases cleared', 'info');
@@ -2050,9 +2447,108 @@ const Dashboard = {
     });
     
     // Theme toggle (placeholder)
-    DOM.$('#theme-toggle')?.addEventListener('click', () => {
-      Toast.show('Theme switching coming soon', 'info');
+    DOM.$('#theme-select')?.addEventListener('change', (e) => {
+      ThemeManager.applyTheme(e.target.value);
     });
+
+    const closeDrawer = () => this.closeUserDrawer();
+    DOM.$('#drawer-close')?.addEventListener('click', closeDrawer);
+    DOM.$('#drawer-backdrop')?.addEventListener('click', closeDrawer);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeDrawer();
+    });
+
+    DOM.$('#cfo-export')?.addEventListener('click', () => this.exportSnapshot());
+
+    DOM.$('#toggle-advanced')?.addEventListener('click', () => {
+      const current = Store.get('ui.showAdvanced');
+      Store.set('ui.showAdvanced', !current);
+      this.applyAdvancedVisibility();
+    });
+  },
+
+  applyAdvancedVisibility() {
+    const show = Store.get('ui.showAdvanced');
+    document.body.classList.toggle('advanced-hidden', !show);
+    const btn = DOM.$('#toggle-advanced');
+    if (btn) btn.textContent = show ? 'Hide Advanced' : 'Show Advanced';
+  },
+
+  exportSnapshot() {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+      Toast.show('PDF library not loaded', 'error');
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+    const container = DOM.$('#cfo-snapshot');
+    const profile = Store.get('userProfile') || {};
+    const analystName = profile.name || 'Analyst';
+    const auditType = profile.sheet_type || 'Audit';
+
+    // Watermark
+    doc.setTextColor(80, 98, 120);
+    doc.setFontSize(64);
+    doc.setGState(new doc.GState({ opacity: 0.06 }));
+    doc.text('KAVACH', doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() / 2, {
+      align: 'center',
+      angle: 25
+    });
+    doc.setGState(new doc.GState({ opacity: 1 }));
+
+    // Header band
+    doc.setFillColor(12, 18, 36);
+    doc.rect(0, 0, doc.internal.pageSize.getWidth(), 90, 'F');
+    doc.setTextColor(226, 232, 240);
+    doc.setFontSize(20);
+    doc.text('KAVACH CFO Snapshot', 40, 50);
+    doc.setFontSize(11);
+    doc.text(`Analyst: ${analystName}`, 40, 70);
+    doc.text(`Audit: ${auditType}`, 220, 70);
+
+    // Body
+    let y = 125;
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(12);
+    if (container) {
+      container.querySelectorAll('.snapshot-card').forEach(card => {
+        const title = card.querySelector('.snapshot-title')?.textContent || '';
+        const value = card.querySelector('.snapshot-value')?.textContent || '';
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(40, y - 18, doc.internal.pageSize.getWidth() - 80, 34, 8, 8, 'F');
+        doc.setTextColor(100, 116, 139);
+        doc.setFontSize(9);
+        doc.text(title.toUpperCase(), 55, y - 2);
+        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(12);
+        doc.text(value, 220, y - 2);
+        y += 42;
+      });
+    }
+
+    // Footer
+    const pageHeight = doc.internal.pageSize.getHeight();
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(9);
+    const dateStr = new Date().toLocaleString();
+    doc.text(`Generated: ${dateStr}`, 40, pageHeight - 30);
+    doc.text('Confidential • KAVACH Risk Intelligence', doc.internal.pageSize.getWidth() - 260, pageHeight - 30);
+
+    doc.save(`kavach-cfo-snapshot-${new Date().toISOString().split('T')[0]}.pdf`);
+    Toast.show('Snapshot downloaded', 'success');
+  },
+
+  closeUserDrawer() {
+    const drawer = DOM.$('#user-drawer');
+    const backdrop = DOM.$('#drawer-backdrop');
+    if (drawer) {
+      drawer.classList.remove('open');
+      drawer.setAttribute('aria-hidden', 'true');
+    }
+    if (backdrop) {
+      backdrop.classList.remove('active');
+      backdrop.setAttribute('aria-hidden', 'true');
+    }
   },
 
   togglePlotlyOrbit() {
@@ -2309,3 +2805,6 @@ document.addEventListener('DOMContentLoaded', () => {
     Dashboard.init();
   }
 });
+    const palette = this.themePalette();
+    const palette = this.themePalette();
+    const palette = this.themePalette();

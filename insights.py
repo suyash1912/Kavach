@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Dict, List, Tuple
 
 import pandas as pd
+import numpy as np
 
 from preprocessing import AMOUNT_COLUMN, TIMESTAMP_COLUMN
 
@@ -63,7 +64,7 @@ def compute_basic_insights(df: pd.DataFrame) -> Dict:
             "user_id": str(row["user_id"]),
             "total_spend": float(row["total_spend"]),
             "avg_transaction": float(row["avg_transaction"]),
-            "tx_count": int(row["tx_count"]),
+            "tx_count": int(row["tx_count"]) if pd.notna(row["tx_count"]) else 0,
         }
         for _, row in per_user.iterrows()
     ]
@@ -110,7 +111,7 @@ def build_fraud_table(df_with_flags: pd.DataFrame) -> List[Dict]:
 
     df_flagged = df_flagged.copy()
     if "id" not in df_flagged.columns:
-        df_flagged["id"] = df_flagged.index.astype(int)
+        df_flagged["id"] = np.arange(len(df_flagged))
 
     columns_to_keep = [
         "id",
