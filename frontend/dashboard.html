@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="KAVACH - AI-powered transaction risk intelligence and fraud detection dashboard" />
+  <meta name="theme-color" content="#0b1020" />
+  
+  <title>KAVACH — Risk Intelligence Dashboard</title>
+  
+  <!-- Preload critical assets -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" as="style" />
+  
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="/static/style.css" />
+  
+  <!-- Deferred heavy libraries -->
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script defer src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
+</head>
+
+<body class="kavach-body" data-page="dashboard">
+  <!-- Skip link for accessibility -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  
+  <!-- Toast notification container -->
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <div class="dashboard-shell">
+    <!-- Header -->
+    <header class="dashboard-header" role="banner">
+      <div class="brand">
+        <div class="logo-mark" aria-hidden="true">K</div>
+        <div class="logo-text">
+          <span class="logo-title">KAVACH</span>
+          <span class="logo-subtitle">Risk Intelligence Console</span>
+        </div>
+      </div>
+      
+      <nav class="top-tabs" role="navigation" aria-label="Main navigation">
+        <a class="tab-pill tab-pill-active" href="/dashboard" aria-current="page">Audit</a>
+        <a class="tab-pill" href="/#pricing">Pricing</a>
+        <a class="tab-pill" href="/#contact">Contact</a>
+      </nav>
+      
+      <div class="header-meta">
+        <button class="badge badge-green" id="session-toggle" aria-label="Session status: Local processing active">
+          <span class="status-dot"></span> Local
+        </button>
+        <button class="badge badge-amber" id="ai-status" aria-label="AI service: KAVACH powered">
+          <span class="status-dot pulse"></span> KAVACH
+        </button>
+        <button class="icon-btn" id="theme-toggle" aria-label="Toggle dark/light mode">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"/>
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main id="main-content" class="dashboard-main" role="main">
+      <!-- Enhanced Quick Stats Bar with Real-time Updates -->
+      <section class="quick-stats" aria-label="Quick statistics">
+        <div class="stat-item">
+          <span class="stat-label">Last scan</span>
+          <span class="stat-value" id="last-scan">—</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Files processed</span>
+          <span class="stat-value" id="files-count">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Avg. scan time</span>
+          <span class="stat-value" id="avg-time">—</span>
+        </div>
+        <div class="stat-item live-stat">
+          <span class="stat-label">Live Risk Score</span>
+          <span class="stat-value" id="live-risk-score">0.00</span>
+          <div class="live-indicator" id="live-indicator">●</div>
+        </div>
+      </section>
+
+      <!-- Upload Panel -->
+      <section class="upload-panel glass reveal" aria-labelledby="upload-heading">
+        <div class="upload-panel-text">
+          <p class="eyebrow">Data Ingestion</p>
+          <h2 id="upload-heading">Upload Transaction Data</h2>
+          <p>Excel files (.xlsx, .xls, .csv) with columns: user_id, amount, category, merchant, country, timestamp.</p>
+          
+          <div class="upload-features">
+            <span class="feature-tag">✓ ML Anomaly Detection</span>
+            <span class="feature-tag">✓ Rule-based Flags</span>
+            <span class="feature-tag">✓ Real-time Analysis</span>
+          </div>
+        </div>
+        
+        <form id="upload-form" class="upload-form" enctype="multipart/form-data">
+          <div class="input-grid">
+            <label class="input-field">
+              <span>Analyst Name <span class="required" aria-hidden="true">*</span></span>
+              <input 
+                type="text" 
+                id="user-name" 
+                name="user_name" 
+                placeholder="e.g., Riya Sharma"
+                autocomplete="name"
+                required
+                aria-required="true"
+              />
+            </label>
+            <label class="input-field">
+              <span>Age Range</span>
+              <select id="user-age" name="user_age" aria-label="Age range">
+                <option value="">Select range</option>
+                <option value="18-25">18-25</option>
+                <option value="26-35">26-35</option>
+                <option value="36-50">36-50</option>
+                <option value="50+">50+</option>
+              </select>
+            </label>
+            <label class="input-field">
+              <span>Analysis Type</span>
+              <input 
+                type="text" 
+                id="sheet-type" 
+                name="sheet_type" 
+                placeholder="e.g., Q4 Fraud Audit"
+                list="sheet-types"
+              />
+              <datalist id="sheet-types">
+                <option value="Monthly Reconciliation">
+                <option value="Quarterly Review">
+                <option value="Compliance Audit">
+                <option value="Ad-hoc Investigation">
+              </datalist>
+            </label>
+          </div>
+          
+          <div class="drop-zone" id="drop-zone">
+            <input 
+              type="file" 
+              id="file-input" 
+              name="file" 
+              accept=".xlsx,.xls,.csv"
+              aria-describedby="file-help"
+              required
+            />
+            <div class="drop-zone-content">
+              <svg class="upload-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              <div class="drop-text">
+                <p class="drop-title">Drop files here or click to browse</p>
+                <p class="drop-subtitle" id="file-help">Supports .xlsx, .xls, .csv up to 50MB</p>
+              </div>
+              <span class="file-cta">Select File</span>
+            </div>
+            <div class="file-preview" id="file-preview" hidden>
+              <div class="file-info">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                <span class="file-name" id="file-name"></span>
+                <span class="file-size" id="file-size"></span>
+              </div>
+              <button type="button" class="icon-btn remove-file" aria-label="Remove file">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          <div class="upload-actions">
+            <button type="submit" class="primary-btn" id="analyze-btn">
+              <span class="btn-text">Analyze Now</span>
+              <span class="btn-loader" hidden>
+                <svg class="spinner-sm" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60" stroke-dashoffset="20"/>
+                </svg>
+              </span>
+            </button>
+            <a class="ghost-btn" href="/static/sample.xlsx" download>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Sample File
+            </a>
+          </div>
+          
+          <div class="upload-meta">
+            <label class="checkbox-label">
+              <input type="checkbox" name="save_session" checked />
+              <span>Save to session history</span>
+            </label>
+            <span class="privacy-note">🔒 Data stays on your device</span>
+          </div>
+        </form>
+      </section>
+
+      <!-- KPI Cards -->
+      <section class="kpi-strip" aria-label="Key performance indicators">
+        <article class="kpi-card glass">
+          <div class="kpi-header">
+            <p class="kpi-label">Total Exposure</p>
+            <button class="kpi-info" aria-label="More info about total exposure" data-tooltip="Sum of all transaction amounts in current dataset">ⓘ</button>
+          </div>
+          <p class="kpi-value" id="kpi-total-spend">—</p>
+          <div class="kpi-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+            <div class="kpi-bar-fill" id="kpi-bar-total"></div>
+          </div>
+          <p class="kpi-footnote">Across <span id="kpi-tx-count">0</span> transactions</p>
+        </article>
+        
+        <article class="kpi-card glass">
+          <div class="kpi-header">
+            <p class="kpi-label">Top Category</p>
+            <span class="kpi-trend" id="kpi-trend">↗ 12%</span>
+          </div>
+          <p class="kpi-value" id="kpi-top-category">—</p>
+          <div class="kpi-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+            <div class="kpi-bar-fill" id="kpi-bar-category"></div>
+          </div>
+          <p class="kpi-footnote"><span id="kpi-cat-pct">0</span>% of total volume</p>
+        </article>
+        
+        <article class="kpi-card glass risk-kpi">
+          <div class="kpi-header">
+            <p class="kpi-label">Risk Alerts</p>
+            <span class="badge badge-alert" id="risk-badge" hidden>Action needed</span>
+          </div>
+          <p class="kpi-value" id="kpi-risk-count">—</p>
+          <div class="kpi-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+            <div class="kpi-bar-fill" id="kpi-bar-risk"></div>
+          </div>
+          <p class="kpi-footnote">
+            <span id="high-risk-count">0</span> high, <span id="med-risk-count">0</span> medium
+          </p>
+        </article>
+      </section>
+
+      <!-- Analysis Overview -->
+      <section class="grid grid-1 reveal">
+        <div class="card glass analysis-card">
+          <div class="analysis-header">
+            <div>
+              <p class="eyebrow">Dataset Overview</p>
+              <h2 id="analysis-title">Analysis Preview</h2>
+              <p class="analysis-subtitle" id="analysis-subtitle">Upload data to generate insights</p>
+            </div>
+            <div class="analysis-actions">
+              <button class="ghost-btn btn-sm" id="refresh-data" aria-label="Refresh data">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"/>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+              </button>
+              <button class="ghost-btn btn-sm" id="export-analysis" disabled>
+                Export PDF
+              </button>
+            </div>
+          </div>
+          
+          <div class="table-container" tabindex="0" role="region" aria-label="Sample data preview">
+            <table class="data-table" id="sample-table">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Risk Table -->
+      <section class="grid grid-1 reveal">
+        <div class="card glass risk-card">
+          <div class="card-header">
+            <div>
+              <h2>Flagged Transactions</h2>
+              <p class="analysis-subtitle">Risk-ranked anomalies requiring review</p>
+            </div>
+            <div class="header-actions">
+              <button class="icon-btn" id="export-risk" aria-label="Export flagged transactions">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          <div class="table-container" tabindex="0" role="region" aria-label="Flagged high risk transactions">
+            <table class="data-table" id="fraud-table">
+              <thead>
+                <tr>
+                  <th scope="col" data-sort="user_id">User ↕</th>
+                  <th scope="col" data-sort="amount">Amount ↕</th>
+                  <th scope="col" data-sort="country">Country ↕</th>
+                  <th scope="col" data-sort="fraud_score">Score ↕</th>
+                  <th scope="col">Signals</th>
+                  <th scope="col" data-sort="risk">Risk ↕</th>
+                  <th scope="col">Action</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          
+          <div class="table-footer">
+            <span class="table-info" id="fraud-table-info">Showing 0 of 0</span>
+            <div class="pagination" id="fraud-pagination"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Charts -->
+      <section class="grid grid-2 reveal">
+        <div class="card glass premium-chart">
+          <div class="card-header">
+            <h2>Category Distribution</h2>
+            <div class="chart-controls">
+              <button class="chart-type active" data-type="doughnut" aria-label="Doughnut chart">◯</button>
+              <button class="chart-type" data-type="bar" aria-label="Bar chart">▤</button>
+            </div>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="categoryChart"></canvas>
+          </div>
+        </div>
+        
+        <div class="card glass">
+          <div class="card-header">
+            <h2>Temporal Trends</h2>
+            <div class="chart-controls">
+              <button class="time-range active" data-range="monthly">Monthly</button>
+              <button class="time-range" data-range="weekly">Weekly</button>
+            </div>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="monthlyChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- AI Analyst -->
+      <section class="grid grid-1 reveal">
+        <div class="card glass ai-panel kavach-ai">
+          <div class="ai-panel-header">
+            <div class="ai-identity">
+              <div class="ai-avatar" aria-hidden="true">
+                <div class="ai-pulse"></div>
+              </div>
+              <div>
+                <h2>KAVACH AI Analyst</h2>
+                <p class="ai-subtitle">KAVACH‑powered • Context-aware insights</p>
+              </div>
+            </div>
+            <div class="ai-controls">
+              <button class="ghost-btn btn-sm" id="ai-clear">Clear</button>
+              <span class="badge badge-amber">Active</span>
+            </div>
+          </div>
+          
+          <div id="ai-chat-log" class="ai-chat-log" role="log" aria-live="polite" aria-atomic="false">
+            <div class="ai-message system">
+              <div class="ai-avatar-sm" aria-hidden="true"></div>
+              <div class="message-content">
+                <p>👋 Welcome! Upload a dataset and I'll analyze risk patterns, identify anomalies, and explain the factors driving suspicious activity.</p>
+                <div class="suggested-questions">
+                  <button class="chip chip-suggestion">What are the top risk factors?</button>
+                  <button class="chip chip-suggestion">Show me unusual patterns</button>
+                  <button class="chip chip-suggestion">Explain this user's behavior</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <form id="ai-form" class="ai-form">
+            <div class="ai-input-wrapper">
+              <input
+                type="text"
+                id="ai-input"
+                placeholder="Ask about your data... (Press / to focus)"
+                autocomplete="off"
+                aria-label="Ask AI analyst"
+              />
+              <button type="submit" class="primary-btn btn-icon" aria-label="Send message">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="22" y1="2" x2="11" y2="13"/>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </button>
+            </div>
+            <div class="ai-shortcuts">
+              <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to send • <kbd>Esc</kbd> to clear
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- 3D Visualization -->
+      <section class="grid grid-2 reveal">
+        <div class="card glass">
+          <div class="card-header">
+            <h2>Risk Landscape 3D</h2>
+            <div class="viz-controls">
+              <label class="toggle-label">
+                <input type="checkbox" id="auto-rotate" checked />
+                <span>Auto-rotate</span>
+              </label>
+              <button class="ghost-btn btn-sm" id="reset-viz">Reset View</button>
+            </div>
+          </div>
+          <div id="plotly-3d" class="plotly-container" role="img" aria-label="3D risk cluster visualization">
+            <div class="plotly-placeholder">
+              <div class="viz-skeleton">
+                <div class="viz-grid"></div>
+                <div class="viz-points"></div>
+              </div>
+              <p>Upload data to explore risk clusters in 3D space</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="card glass">
+          <div class="card-header">
+            <h2>Anomaly Clusters</h2>
+            <span class="chip">Top Patterns</span>
+          </div>
+          <div class="cluster-panel" id="cluster-panel">
+            <div class="cluster-empty">
+              <p>No clusters detected yet. Process a dataset to see anomaly patterns.</p>
+            </div>
+          </div>
+          
+          <div class="insights-panel" id="insights-panel">
+            <h3>Key Insights</h3>
+            <ul class="insights-list" id="insights-list"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Advanced Analytics Section -->
+      <section class="grid grid-2 reveal">
+        <div class="card glass">
+          <div class="card-header">
+            <h2>Velocity Analysis</h2>
+            <span class="chip">Real-time</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="velocityChart"></canvas>
+          </div>
+          <div class="chart-insights">
+            <div class="insight-item">
+              <span class="insight-label">Peak Activity</span>
+              <span class="insight-value" id="peak-activity">—</span>
+            </div>
+            <div class="insight-item">
+              <span class="insight-label">Velocity Alerts</span>
+              <span class="insight-value" id="velocity-alerts">—</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="card glass">
+          <div class="card-header">
+            <h2>Geographic Risk Map</h2>
+            <span class="chip">Interactive</span>
+          </div>
+          <div id="geo-map" class="geo-map-container">
+            <div class="map-placeholder">
+              <p>Interactive world map showing transaction distribution and risk hotspots</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Full Transaction Table -->
+      <section class="grid grid-1 reveal">
+        <div class="card glass">
+          <div class="card-header">
+            <div>
+              <h2 id="tx-header">Transaction Ledger</h2>
+              <p class="analysis-subtitle" id="tx-subheader">Complete dataset with risk scoring</p>
+            </div>
+            <div class="header-actions">
+              <div class="search-box">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"/>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input type="search" id="tx-search" placeholder="Search transactions..." aria-label="Search transactions" />
+              </div>
+              <div class="export-group">
+                <button class="ghost-btn" id="export-all">Export CSV</button>
+                <button class="ghost-btn" id="export-pdf">Export PDF</button>
+                <button class="ghost-btn" id="export-json">Export JSON</button>
+              </div>
+            </div>
+          </div>
+          
+          <div class="table-container" tabindex="0" role="region" aria-label="All transactions">
+            <table class="data-table" id="transactions-table">
+              <thead>
+                <tr>
+                  <th scope="col" data-sort="user_id">User ID ↕</th>
+                  <th scope="col" data-sort="timestamp">Date & Time ↕</th>
+                  <th scope="col" data-sort="amount">Amount ↕</th>
+                  <th scope="col">Category</th>
+                  <th scope="col">Merchant</th>
+                  <th scope="col">Country</th>
+                  <th scope="col" data-sort="fraud_score">Risk Score ↕</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          
+          <div class="table-footer">
+            <span class="table-info" id="tx-table-info">Showing 0 of 0</span>
+            <div class="pagination" id="tx-pagination"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="loading-title" aria-hidden="true">
+    <div class="loading-card">
+      <div class="loading-visual">
+        <div class="spinner-ring"></div>
+        <div class="spinner-ring"></div>
+        <div class="spinner-ring"></div>
+      </div>
+      <h3 id="loading-title">Analyzing Dataset</h3>
+      <p class="loading-status" id="loading-status">Initializing...</p>
+      <div class="loading-progress">
+        <div class="loading-bar" id="loading-bar"></div>
+      </div>
+      <p class="loading-sub" id="loading-detail">Processing transaction patterns</p>
+      <div class="loading-phases" id="loading-phases"></div>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <dialog id="detail-modal" class="modal glass">
+    <div class="modal-header">
+      <h3>Transaction Details</h3>
+      <button class="modal-close" aria-label="Close modal">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </dialog>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>

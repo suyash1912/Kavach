@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="KAVACH - Enterprise-grade fraud detection and risk intelligence for fintech" />
+  <meta name="theme-color" content="#0b1020" />
+  
+  <title>KAVACH — Fintech Risk Intelligence Platform</title>
+  
+  <!-- Preload -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preload" href="/static/style.css" as="style" />
+  
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+
+<body class="kavach-body marketing-body" data-page="landing">
+  <!-- Skip link -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <!-- Navigation -->
+  <header class="landing-header" role="banner">
+    <div class="brand">
+      <div class="logo-mark" aria-hidden="true">K</div>
+      <div class="logo-text">
+        <span class="logo-title">KAVACH</span>
+        <span class="logo-subtitle">Risk Intelligence</span>
+      </div>
+    </div>
+    
+    <nav class="top-tabs" role="navigation" aria-label="Main">
+      <a class="tab-pill" href="/dashboard">Launch App</a>
+      <a class="tab-pill" href="#features">Features</a>
+      <a class="tab-pill" href="#how-it-works">How it Works</a>
+      <a class="tab-pill" href="#pricing">Pricing</a>
+    </nav>
+    
+    <div class="header-cta">
+      <a href="/dashboard" class="primary-btn btn-sm">Get Started Free</a>
+    </div>
+  </header>
+
+  <main id="main-content" class="landing-main">
+    <!-- Hero Section -->
+    <section class="hero" aria-labelledby="hero-heading">
+      <div class="hero-content">
+        <div class="hero-badge">
+          <span class="badge-new">New</span>
+          <span>Now with real-time KAVACH AI analysis</span>
+        </div>
+        
+        <h1 id="hero-heading">
+          Detect fraud before it happens.
+          <span class="headline-accent">Not after the damage.</span>
+        </h1>
+        
+        <p class="hero-lead">
+          KAVACH combines machine learning anomaly detection with rule-based risk scoring to identify suspicious transactions in milliseconds. Built for fintech teams who can't afford blind spots.
+        </p>
+        
+        <div class="hero-cta-group">
+          <a href="/dashboard" class="primary-btn btn-lg">
+            Start Free Analysis
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="5" y1="12" x2="19" y2="12"/>
+              <polyline points="12 5 19 12 12 19"/>
+            </svg>
+          </a>
+          <button class="ghost-btn btn-lg" id="watch-demo">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            Watch Demo
+          </button>
+        </div>
+        
+        <div class="trust-bar">
+          <div class="trust-item">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <span>PCI-DSS Ready</span>
+          </div>
+          <div class="trust-item">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <span>Bank-grade Encryption</span>
+          </div>
+          <div class="trust-item">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <polyline points="9 12 12 15 16 10"/>
+            </svg>
+            <span>99.9% Uptime SLA</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="hero-visual">
+        <div class="dashboard-preview glass">
+          <div class="preview-header">
+            <div class="preview-dots">
+              <span></span><span></span><span></span>
+            </div>
+            <span class="preview-title">Live Risk Dashboard</span>
+          </div>
+          <div class="preview-body">
+            <div class="preview-kpi">
+              <div class="preview-kpi-item">
+                <span class="label">Risk Score</span>
+                <span class="value alert">87.3</span>
+              </div>
+              <div class="preview-kpi-item">
+                <span class="label">Flagged</span>
+                <span class="value">12</span>
+              </div>
+              <div class="preview-kpi-item">
+                <span class="label">Analyzed</span>
+                <span class="value">2.4K</span>
+              </div>
+            </div>
+            <div class="preview-chart"></div>
+            <div class="preview-alert">
+              <span class="alert-icon">⚠️</span>
+              <span>Velocity anomaly detected in User #4482</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="floating-stats glass">
+          <div class="stat-row">
+            <span class="stat-label">Processing Speed</span>
+            <span class="stat-value"><span class="counter" data-target="50">0</span>ms</span>
+          </div>
+          <div class="progress-line"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Logo Strip -->
+    <section class="logo-strip" aria-label="Trusted by">
+      <p>Trusted by risk teams at</p>
+      <div class="logo-grid">
+        <span class="logo-placeholder">OrbitPay</span>
+        <span class="logo-placeholder">MercuryLend</span>
+        <span class="logo-placeholder">NovaBank</span>
+        <span class="logo-placeholder">FinFlow</span>
+        <span class="logo-placeholder">SecureCash</span>
+      </div>
+    </section>
+
+    <!-- Features Grid -->
+    <section class="section features-section" id="features" aria-labelledby="features-heading">
+      <div class="section-head">
+        <span class="eyebrow">Capabilities</span>
+        <h2 id="features-heading">Everything you need to stay ahead of risk</h2>
+        <p>From anomaly detection to executive reporting, KAVACH handles the heavy lifting so your team can focus on decisions.</p>
+      </div>
+      
+      <div class="features-grid">
+        <article class="feature-card glass">
+          <div class="feature-icon" style="--icon-color: #2dd4bf;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <h3>ML Anomaly Detection</h3>
+          <p>Isolation Forest and custom ensemble models identify outliers in velocity, amount, and behavioral patterns.</p>
+          <ul class="feature-list">
+            <li>Unsupervised learning</li>
+            <li>Feature engineering automation</li>
+            <li>Confidence scoring</li>
+          </ul>
+        </article>
+        
+        <article class="feature-card glass">
+          <div class="feature-icon" style="--icon-color: #fbbf24;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+          </div>
+          <h3>Rule Engine</h3>
+          <p>Combine ML with deterministic rules for regulatory compliance and known fraud patterns.</p>
+          <ul class="feature-list">
+            <li>Threshold-based flags</li>
+            <li>Velocity checks</li>
+            <li>Geographic restrictions</li>
+          </ul>
+        </article>
+        
+        <article class="feature-card glass">
+          <div class="feature-icon" style="--icon-color: #a78bfa;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <h3>AI Explanations</h3>
+          <p>KAVACH‑powered LLM generates human-readable summaries of complex risk patterns for stakeholders.</p>
+          <ul class="feature-list">
+            <li>Natural language reports</li>
+            <li>Context-aware insights</li>
+            <li>Executive summaries</li>
+          </ul>
+        </article>
+        
+        <article class="feature-card glass">
+          <div class="feature-icon" style="--icon-color: #f472b6;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </div>
+          <h3>Privacy-First</h3>
+          <p>Local processing keeps sensitive data on your infrastructure. No data lakes, no external exposure.</p>
+          <ul class="feature-list">
+            <li>On-premise deployment</li>
+            <li>End-to-end encryption</li>
+            <li>Audit logging</li>
+          </ul>
+        </article>
+        
+        <article class="feature-card glass">
+          <div class="feature-icon" style="--icon-color: #38bdf8;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 20V10M12 20V4M6 20v-6"/>
+            </svg>
+          </div>
+          <h3>Real-time Analytics</h3>
+          <p>Interactive dashboards with drill-down capabilities into transaction-level details.</p>
+          <ul class="feature-list">
+            <li>3D risk visualization</li>
+            <li>Temporal analysis</li>
+            <li>Custom dashboards</li>
+          </ul>
+        </article>
+        
+        <article class="feature-card glass">
+          <div class="feature-icon" style="--icon-color: #4ade80;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+          </div>
+          <h3>Export & Reporting</h3>
+          <p>Generate compliance-ready reports and export data for downstream systems.</p>
+          <ul class="feature-list">
+            <li>PDF generation</li>
+            <li>CSV/Excel export</li>
+            <li>API access</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <!-- How it Works -->
+    <section class="section steps-section" id="how-it-works" aria-labelledby="steps-heading">
+      <div class="section-head">
+        <span class="eyebrow">Workflow</span>
+        <h2 id="steps-heading">From upload to insight in 60 seconds</h2>
+      </div>
+      
+      <div class="steps-timeline">
+        <div class="step">
+          <div class="step-number">01</div>
+          <div class="step-content glass">
+            <h3>Upload</h3>
+            <p>Drag and drop your Excel or CSV file. No data transformation needed.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">02</div>
+          <div class="step-content glass">
+            <h3>Analyze</h3>
+            <p>ML models scan for anomalies while rule engine applies business logic.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">03</div>
+          <div class="step-content glass">
+            <h3>Review</h3>
+            <p>Interactive dashboards show risk-ranked transactions with full context.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">04</div>
+          <div class="step-content glass">
+            <h3>Act</h3>
+            <p>Export findings, generate reports, or integrate with your case management.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Testimonials -->
+    <section class="section" id="testimonials" aria-labelledby="testimonials-heading">
+      <div class="section-head">
+        <span class="eyebrow">Testimonials</span>
+        <h2 id="testimonials-heading">Trusted by fintech risk teams</h2>
+      </div>
+      
+      <div class="testimonial-carousel">
+        <article class="testimonial-card glass active">
+          <div class="testimonial-rating">★★★★★</div>
+          <blockquote>
+            <p>"The AI explanations read like a senior analyst wrote them. It's cut our investigation time by 70%."</p>
+            <footer>
+              <div class="testimonial-avatar" aria-hidden="true">RM</div>
+              <div>
+                <cite>Riya Mehra</cite>
+                <span class="testimonial-role">Risk Lead, OrbitPay</span>
+              </div>
+            </footer>
+          </blockquote>
+        </article>
+        
+        <article class="testimonial-card glass">
+          <div class="testimonial-rating">★★★★★</div>
+          <blockquote>
+            <p>"Finally, a fraud tool that doesn't require a PhD to operate. The UI is intuitive but the backend is powerful."</p>
+            <footer>
+              <div class="testimonial-avatar" aria-hidden="true">DR</div>
+              <div>
+                <cite>Devansh Rao</cite>
+                <span class="testimonial-role">CTO, MercuryLend</span>
+              </div>
+            </footer>
+          </blockquote>
+        </article>
+        
+        <article class="testimonial-card glass">
+          <div class="testimonial-rating">★★★★★</div>
+          <blockquote>
+            <p>"We evaluated 5 tools. KAVACH was the only one that balanced sophistication with usability."</p>
+            <footer>
+              <div class="testimonial-avatar" aria-hidden="true">AK</div>
+              <div>
+                <cite>Aisha Khan</cite>
+                <span class="testimonial-role">VP Product, NovaBank</span>
+              </div>
+            </footer>
+          </blockquote>
+        </article>
+        
+        <div class="carousel-controls">
+          <button class="carousel-btn prev" aria-label="Previous testimonial">←</button>
+          <div class="carousel-dots"></div>
+          <button class="carousel-btn next" aria-label="Next testimonial">→</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="section" id="pricing" aria-labelledby="pricing-heading">
+      <div class="section-head">
+        <span class="eyebrow">Pricing</span>
+        <h2 id="pricing-heading">Simple, transparent pricing</h2>
+        <p>Start free, scale as you grow. No hidden fees or long-term contracts.</p>
+      </div>
+      
+      <div class="pricing-grid">
+        <article class="pricing-card glass">
+          <div class="pricing-header">
+            <h3>Starter</h3>
+            <div class="pricing-price">
+              <span class="currency">₹</span>
+              <span class="amount">0</span>
+              <span class="period">/month</span>
+            </div>
+          </div>
+          <p class="pricing-desc">For individuals and small audits</p>
+          <ul class="pricing-features">
+            <li>Up to 1,000 transactions/month</li>
+            <li>Basic risk scoring</li>
+            <li>7-day data retention</li>
+            <li>Email support</li>
+          </ul>
+          <a href="/dashboard" class="ghost-btn btn-full">Get Started</a>
+        </article>
+        
+        <article class="pricing-card glass featured">
+          <div class="popular-badge">Most Popular</div>
+          <div class="pricing-header">
+            <h3>Professional</h3>
+            <div class="pricing-price">
+              <span class="currency">₹</span>
+              <span class="amount">4,999</span>
+              <span class="period">/month</span>
+            </div>
+          </div>
+          <p class="pricing-desc">For growing fintech teams</p>
+          <ul class="pricing-features">
+            <li>Up to 100,000 transactions/month</li>
+            <li>Advanced ML models</li>
+            <li>AI explanations (KAVACH)</li>
+            <li>3D risk visualization</li>
+            <li>Priority support</li>
+            <li>API access</li>
+          </ul>
+          <a href="/dashboard" class="primary-btn btn-full">Start Free Trial</a>
+        </article>
+        
+        <article class="pricing-card glass">
+          <div class="pricing-header">
+            <h3>Enterprise</h3>
+            <div class="pricing-price">
+              <span class="custom">Custom</span>
+            </div>
+          </div>
+          <p class="pricing-desc">For large-scale operations</p>
+          <ul class="pricing-features">
+            <li>Unlimited transactions</li>
+            <li>Custom model training</li>
+            <li>On-premise deployment</li>
+            <li>Dedicated account manager</li>
+            <li>SLA guarantees</li>
+            <li>SSO & Audit logs</li>
+          </ul>
+          <button class="ghost-btn btn-full" id="contact-sales">Contact Sales</button>
+        </article>
+      </div>
+      
+      <div class="pricing-guarantee">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <polyline points="9 12 12 15 16 10"/>
+        </svg>
+        <span>30-day money-back guarantee. No questions asked.</span>
+      </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="section cta-section">
+      <div class="cta-card glass">
+        <h2>Ready to secure your transactions?</h2>
+        <p>Join hundreds of fintech teams using KAVACH to detect fraud faster.</p>
+        <div class="cta-actions">
+          <a href="/dashboard" class="primary-btn btn-lg">Start Free Analysis</a>
+          <button class="ghost-btn btn-lg" id="schedule-demo">Schedule Demo</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="landing-footer">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="brand">
+            <div class="logo-mark" aria-hidden="true">K</div>
+            <span class="logo-title">KAVACH</span>
+          </div>
+          <p>Enterprise-grade fraud detection for modern fintech.</p>
+          <div class="social-links">
+            <a href="#" aria-label="Twitter">𝕏</a>
+            <a href="#" aria-label="LinkedIn">in</a>
+            <a href="#" aria-label="GitHub">⌘</a>
+          </div>
+        </div>
+        
+        <div class="footer-links">
+          <h4>Product</h4>
+          <ul>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#pricing">Pricing</a></li>
+            <li><a href="#">API Docs</a></li>
+            <li><a href="#">Changelog</a></li>
+          </ul>
+        </div>
+        
+        <div class="footer-links">
+          <h4>Resources</h4>
+          <ul>
+            <li><a href="#">Documentation</a></li>
+            <li><a href="#">Case Studies</a></li>
+            <li><a href="#">Blog</a></li>
+            <li><a href="#">Community</a></li>
+          </ul>
+        </div>
+        
+        <div class="footer-links">
+          <h4>Company</h4>
+          <ul>
+            <li><a href="#">About</a></li>
+            <li><a href="#">Careers</a></li>
+            <li><a href="#">Contact</a></li>
+            <li><a href="#">Security</a></li>
+          </ul>
+        </div>
+      </div>
+      
+      <div class="footer-bottom">
+        <p>&copy; 2025 KAVACH Risk Intelligence. All rights reserved.</p>
+        <div class="footer-legal">
+          <a href="#">Privacy Policy</a>
+          <a href="#">Terms of Service</a>
+          <button class="text-btn" id="demo-notice">Demo Notice</button>
+        </div>
+      </div>
+    </footer>
+  </main>
+
+  <!-- Demo Modal -->
+  <dialog id="demo-modal" class="modal glass">
+    <div class="modal-content">
+      <h3>Watch KAVACH in Action</h3>
+      <div class="video-placeholder">
+        <p>Demo video coming soon</p>
+      </div>
+      <button class="modal-close" aria-label="Close modal">&times;</button>
+    </div>
+  </dialog>
+
+  <!-- Demo Notice Modal -->
+  <dialog id="notice-modal" class="modal glass">
+    <div class="modal-content">
+      <h3>About This Demo</h3>
+      <p>KAVACH is a local academic demonstration designed to showcase fintech-grade UI/UX patterns. All data processing occurs on your device.</p>
+      <button class="primary-btn" onclick="this.closest('dialog').close()">Got it</button>
+    </div>
+  </dialog>
+
+  <script type="module" src="/static/landing.js"></script>
+</body>
+</html>
