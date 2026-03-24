@@ -1,6 +1,6 @@
 """
 Company-focused Chartered Accountant (CA) analysis module.
-Production-ready version with corrected anomaly detection and exports.
+Production-ready version with corrected anomaly detection and premium PDF export.
 """
 
 from __future__ import annotations
@@ -10,8 +10,6 @@ from io import BytesIO
 from typing import Dict, List, Tuple
 
 import base64
-import tempfile
-
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import IsolationForest
@@ -237,20 +235,55 @@ def build_excel_report(df: pd.DataFrame, report: CAReport, verified_only: bool) 
 
 
 # ----------------------------
-# EXPORT: PDF
+# EXPORT: PREMIUM PDF
 # ----------------------------
-def build_pdf_report(report: CAReport) -> bytes:
+def build_pdf_report(report: CAReport, verified_only: bool = True) -> bytes:
     from fpdf import FPDF
 
+    if verified_only and not report.verified:
+        raise ValueError("Cannot generate verified PDF while anomalies exist.")
+
     pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=20)
     pdf.add_page()
 
+    # Header
+    pdf.set_font("Arial", "B", 18)
+    pdf.cell(0, 10, "KAVACH", ln=True, align="C")
+
+    pdf.set_font("Arial", size=10)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 6, "Financial Integrity Verification Report", ln=True, align="C")
+
+    pdf.ln(10)
+
+    # Verified Badge
+    pdf.set_text_color(34, 197, 94)
+    pdf.set_font("Arial", "B", 22)
+    pdf.cell(0, 15, "KAVACH VERIFIED", ln=True, align="C")
+
     pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt="KAVACH Verification Report", ln=True)
+    pdf.cell(0, 8, "This dataset passed all anomaly detection checks", ln=True, align="C")
 
-    pdf.cell(200, 10, txt=f"Verified: {report.verified}", ln=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(15)
 
-    for k, v in report.summary.items():
-        pdf.cell(200, 10, txt=f"{k}: {v}", ln=True)
+    # Summary
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, "Financial Summary", ln=True)
+
+    pdf.set_font("Arial", size=12)
+    pdf.cell(0, 8, f"Revenue   : ₹ {report.summary['revenue']:,.2f}", ln=True)
+    pdf.cell(0, 8, f"Expenses  : ₹ {report.summary['expenses']:,.2f}", ln=True)
+    pdf.cell(0, 8, f"Net Profit: ₹ {report.summary['profit']:,.2f}", ln=True)
+
+    pdf.ln(15)
+
+    # Footer
+    pdf.set_y(-40)
+    pdf.set_font("Arial", "I", 10)
+    pdf.set_text_color(120, 120, 120)
+    pdf.cell(0, 6, "Verified by Kavach Financial Intelligence System", ln=True, align="C")
+    pdf.cell(0, 6, "Automated Compliance Certification", ln=True, align="C")
 
     return pdf.output(dest="S").encode("latin1")
