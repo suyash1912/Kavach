@@ -1,6 +1,6 @@
 """
 Company-focused Chartered Accountant (CA) analysis module.
-Fully corrected anomaly detection + clean financial validation pipeline.
+Production-ready version with corrected anomaly detection and exports.
 """
 
 from __future__ import annotations
@@ -18,12 +18,15 @@ from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
 
+# ----------------------------
+# COLUMN MAPPING
+# ----------------------------
 COLUMN_ALIASES = {
-    "date": ["date", "txn_date", "transaction_date", "posted_date", "time", "timestamp"],
-    "amount": ["amount", "value", "amt", "transaction_amount", "net_amount"],
-    "category": ["category", "type", "expense_type", "revenue_type", "particulars", "description"],
-    "vendor": ["vendor", "merchant", "supplier", "payee"],
-    "customer": ["customer", "client", "payer"],
+    "date": ["date", "txn_date", "transaction_date"],
+    "amount": ["amount", "value", "amt"],
+    "category": ["category", "type", "description"],
+    "vendor": ["vendor", "merchant", "supplier"],
+    "customer": ["customer", "client"],
 }
 
 
@@ -38,33 +41,23 @@ class CAReport:
 
 
 # ----------------------------
-# NORMALIZATION
+# NORMALIZE COLUMNS
 # ----------------------------
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df.columns = [str(c).strip().lower() for c in df.columns]
 
-    mapped = {}
     for canonical, variants in COLUMN_ALIASES.items():
         for v in variants:
             if v in df.columns:
-                mapped[canonical] = v
+                df[canonical] = df[v]
                 break
-
-    # Handle debit/credit logic
-    if "debit" in df.columns and "credit" in df.columns:
-        df["amount"] = pd.to_numeric(df["credit"], errors="coerce").fillna(0) - \
-                       pd.to_numeric(df["debit"], errors="coerce").fillna(0)
-
-    for canonical, src in mapped.items():
-        if canonical != src:
-            df[canonical] = df[src]
 
     return df
 
 
 # ----------------------------
-# PREP
+# PREP DATA
 # ----------------------------
 def _prepare_frame(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -80,7 +73,7 @@ def _prepare_frame(df: pd.DataFrame) -> pd.DataFrame:
         errors="coerce",
     ).fillna(0.0)
 
-    df["category"] = df.get("category").fillna("Uncategorized").astype(str)
+    df["category"] = df.get("category").fillna("Uncategorized").astype(str).str.strip()
 
     return df
 
@@ -103,8 +96,10 @@ def _monthly_trends(df: pd.DataFrame):
         df.dropna(subset=["date"])
         .set_index("date")
         .resample("ME")
-        .agg(revenue=("amount", lambda s: s[s > 0].sum()),
-             expenses=("amount", lambda s: s[s < 0].abs().sum()))
+        .agg(
+            revenue=("amount", lambda s: s[s > 0].sum()),
+            expenses=("amount", lambda s: s[s < 0].abs().sum()),
+        )
     )
     return [
         {"month": i.strftime("%Y-%m"), "revenue": float(r.revenue), "expenses": float(r.expenses)}
@@ -125,13 +120,13 @@ def _detect_anomalies(df: pd.DataFrame) -> List[Dict[str, str]]:
     df = df.copy()
     df["row_number"] = np.arange(len(df)) + 2
 
-    # Basic checks
+    # Basic validation
     for _, row in df.iterrows():
         if pd.isna(row["date"]):
             anomalies.append({"row": str(row.row_number), "field": "date", "issue": "Invalid date"})
         if pd.isna(row["amount"]):
             anomalies.append({"row": str(row.row_number), "field": "amount", "issue": "Missing amount"})
-        if not row["category"].strip():
+        if not row["category"]:
             anomalies.append({"row": str(row.row_number), "field": "category", "issue": "Missing category"})
 
     if len(df) < 50:
@@ -168,7 +163,7 @@ def _detect_anomalies(df: pd.DataFrame) -> List[Dict[str, str]]:
                     "row": str(row.row_number),
                     "field": "amount",
                     "issue": "Unusual transaction detected",
-                    "suggestion": "Verify transaction"
+                    "suggestion": "Verify transaction",
                 })
 
     return anomalies
@@ -179,7 +174,7 @@ def _detect_anomalies(df: pd.DataFrame) -> List[Dict[str, str]]:
 # ----------------------------
 def _plot_to_base64(fig):
     buf = BytesIO()
-    fig.savefig(buf, format="png")
+    fig.savefig(buf, format="png", dpi=120, bbox_inches="tight")
     return base64.b64encode(buf.getvalue()).decode()
 
 
@@ -190,6 +185,7 @@ def _build_charts(df):
 
     fig, ax = plt.subplots()
     ax.plot(df.index, df["amount"])
+    ax.set_title("Transaction Trend")
     charts["trend"] = _plot_to_base64(fig)
     plt.close(fig)
 
@@ -197,7 +193,7 @@ def _build_charts(df):
 
 
 # ----------------------------
-# MAIN
+# MAIN ANALYSIS
 # ----------------------------
 def analyze_company_file(path: str) -> Tuple[pd.DataFrame, CAReport]:
     df = pd.read_csv(path)
@@ -221,3 +217,40 @@ def analyze_company_file(path: str) -> Tuple[pd.DataFrame, CAReport]:
     )
 
     return df, report
+
+
+# ----------------------------
+# EXPORT: EXCEL
+# ----------------------------
+def build_excel_report(df: pd.DataFrame, report: CAReport, verified_only: bool) -> bytes:
+    if verified_only and not report.verified:
+        raise ValueError("Cannot download verified report while anomalies exist.")
+
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Transactions")
+        pd.DataFrame([report.summary]).to_excel(writer, index=False, sheet_name="Summary")
+        pd.DataFrame(report.anomalies).to_excel(writer, index=False, sheet_name="Anomalies")
+
+    return output.getvalue()
+
+
+# ----------------------------
+# EXPORT: PDF
+# ----------------------------
+def build_pdf_report(report: CAReport) -> bytes:
+    from fpdf import FPDF
+
+    pdf = FPDF()
+    pdf.add_page()
+
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt="KAVACH Verification Report", ln=True)
+
+    pdf.cell(200, 10, txt=f"Verified: {report.verified}", ln=True)
+
+    for k, v in report.summary.items():
+        pdf.cell(200, 10, txt=f"{k}: {v}", ln=True)
+
+    return pdf.output(dest="S").encode("latin1")
