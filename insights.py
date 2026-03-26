@@ -43,7 +43,7 @@ def compute_basic_insights(df: pd.DataFrame) -> Dict:
     df_ts[TIMESTAMP_COLUMN] = pd.to_datetime(df_ts[TIMESTAMP_COLUMN], errors="coerce")
     df_ts = df_ts.dropna(subset=[TIMESTAMP_COLUMN])
     df_ts = df_ts.set_index(TIMESTAMP_COLUMN)
-    monthly = df_ts[AMOUNT_COLUMN].resample("M").sum()
+    monthly = df_ts[AMOUNT_COLUMN].resample("ME").sum()
     monthly_trends = [
         {"month": idx.strftime("%Y-%m"), "total_spend": float(val)}
         for idx, val in monthly.items()

@@ -17,13 +17,15 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import time
+import uuid
 from typing import Any, Dict
 
 import joblib
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -78,6 +80,79 @@ class AppState:
 
 
 state = AppState()
+
+# ----------------------------
+# Session state (multi-upload safe)
+# ----------------------------
+SESSION_COOKIE_NAME = "kavach_session"
+SESSION_TTL_SECONDS = 60 * 60  # 1 hour
+SESSION_STORE: dict[str, AppState] = {}
+SESSION_LAST_ACCESS: dict[str, float] = {}
+
+# I keep the model bundle global because it is immutable and shared.
+MODEL_BUNDLE: Dict[str, Any] | None = None
+
+
+def _create_session_state() -> tuple[str, AppState]:
+    session_id = uuid.uuid4().hex
+    s = AppState()
+    SESSION_STORE[session_id] = s
+    SESSION_LAST_ACCESS[session_id] = time.time()
+    return session_id, s
+
+
+def _get_state_for_request(request: Request) -> AppState:
+    session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    if not session_id:
+        # Backwards compatible fallback for older frontends.
+        return state
+
+    now = time.time()
+    last = SESSION_LAST_ACCESS.get(session_id)
+    if last is None or (now - last) > SESSION_TTL_SECONDS:
+        SESSION_STORE.pop(session_id, None)
+        SESSION_LAST_ACCESS.pop(session_id, None)
+        _, s = _create_session_state()
+        return s
+
+    SESSION_LAST_ACCESS[session_id] = now
+    return SESSION_STORE.get(session_id) or state
+
+
+def _rehydrate_company_state_if_needed(s: AppState) -> None:
+    if s.ca_report is not None and s.ca_df is not None:
+        return
+
+    uploaded_path = s.ca_last_upload_path
+    if uploaded_path is None:
+        candidates: list[Path] = []
+        for ext in (".xlsx", ".xls", ".csv"):
+            candidates.extend(DATA_DIR.glob(f"company_upload_*{ext}"))
+        # Also include legacy/non-session filenames if present.
+        for base in (
+            DATA_DIR / "company_upload.xlsx",
+            DATA_DIR / "company_upload.xls",
+            DATA_DIR / "company_upload.csv",
+        ):
+            if base.exists():
+                candidates.append(base)
+        if candidates:
+            uploaded_path = max(candidates, key=lambda p: p.stat().st_mtime)
+
+    if uploaded_path is None or not uploaded_path.exists():
+        return
+
+    df, report = analyze_company_file(uploaded_path)
+    s.ca_df = df
+    s.ca_report = {
+        "summary": report.summary,
+        "monthly_trends": report.monthly_trends,
+        "category_totals": report.category_totals,
+        "anomalies": report.anomalies,
+        "charts": report.charts,
+        "verified": report.verified,
+    }
+    s.ca_last_upload_path = uploaded_path
 
 # Here I expose the static frontend assets (HTML, CSS, JS) under a simple
 # `/static` prefix so that the browser can fetch `style.css` and `script.js`
@@ -152,7 +227,10 @@ def on_startup() -> None:
     DATA_DIR.mkdir(exist_ok=True)
     FRONTEND_DIR.mkdir(exist_ok=True)
 
-    state.model_bundle = _load_model_bundle()
+    global MODEL_BUNDLE
+    MODEL_BUNDLE = _load_model_bundle()
+    # Keep legacy behavior working for any code path that still references `state.model_bundle`.
+    state.model_bundle = MODEL_BUNDLE
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -184,8 +262,10 @@ async def upload_transactions(
             detail="I expect an Excel or CSV file with extension .xlsx, .xls, or .csv.",
         )
 
+    session_id, session_state = _create_session_state()
+
     suffix = Path(file.filename).suffix.lower()
-    tmp_path = DATA_DIR / f"uploaded_transactions{suffix}"
+    tmp_path = DATA_DIR / f"uploaded_transactions_{session_id}{suffix}"
     contents = await file.read()
     tmp_path.write_bytes(contents)
 
@@ -200,17 +280,17 @@ async def upload_transactions(
     insights = compute_basic_insights(df_with_features)
 
     df_scored = _score_transactions_with_model(
-        df_with_features, state.model_bundle
+        df_with_features, MODEL_BUNDLE
     )
     fraud_table = build_fraud_table(df_scored)
     cluster_insights = build_cluster_insights(df_scored)
 
-    state.raw_df = df_raw
-    state.df_with_features = df_scored
-    state.insights = insights
-    state.fraud_table = fraud_table
-    state.cluster_insights = cluster_insights
-    state.user_profile = {
+    session_state.raw_df = df_raw
+    session_state.df_with_features = df_scored
+    session_state.insights = insights
+    session_state.fraud_table = fraud_table
+    session_state.cluster_insights = cluster_insights
+    session_state.user_profile = {
         "name": user_name.strip(),
         "age": user_age.strip(),
         "sheet_type": sheet_type.strip(),
@@ -227,10 +307,29 @@ async def upload_transactions(
             else:
                 record[key] = value
         sample_rows.append(record)
+    session_state.sample_rows = sample_rows
+    session_state.last_upload_path = tmp_path
+
+    # Backwards-compatible legacy behavior (single global session).
+    # This keeps existing clients working even if cookies aren't persisted.
+    state.raw_df = df_raw
+    state.df_with_features = df_scored
+    state.insights = insights
+    state.fraud_table = fraud_table
+    state.cluster_insights = cluster_insights
+    state.user_profile = session_state.user_profile
     state.sample_rows = sample_rows
     state.last_upload_path = tmp_path
 
-    return JSONResponse({"status": "ok"})
+    response = JSONResponse({"status": "ok"})
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=session_id,
+        httponly=True,
+        samesite="lax",
+        max_age=SESSION_TTL_SECONDS,
+    )
+    return response
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -254,39 +353,46 @@ async def company_accountant_page() -> HTMLResponse:
 
 
 @app.get("/dashboard_data")
-async def dashboard_data() -> JSONResponse:
+async def dashboard_data(request: Request) -> JSONResponse:
     """
     Here I expose the latest analytics snapshot as JSON so that the
     frontend can render charts and tables with Chart.js.
     """
-    if state.df_with_features is None or state.insights is None:
+    s = _get_state_for_request(request)
+
+    if s.df_with_features is None or s.insights is None:
         # Attempt to rehydrate from the last uploaded file on disk.
-        uploaded_path = state.last_upload_path or None
+        uploaded_path = s.last_upload_path or None
         if uploaded_path is None:
-            for candidate in (
+            candidates: list[Path] = []
+            for ext in (".xlsx", ".xls", ".csv"):
+                candidates.extend(DATA_DIR.glob(f"uploaded_transactions_*{ext}"))
+            # Also include legacy/non-session filenames if present.
+            for base in (
                 DATA_DIR / "uploaded_transactions.xlsx",
                 DATA_DIR / "uploaded_transactions.xls",
                 DATA_DIR / "uploaded_transactions.csv",
             ):
-                if candidate.exists():
-                    uploaded_path = candidate
-                    break
+                if base.exists():
+                    candidates.append(base)
+            if candidates:
+                uploaded_path = max(candidates, key=lambda p: p.stat().st_mtime)
         if uploaded_path is not None and uploaded_path.exists():
             try:
                 df_raw = load_transactions_excel(uploaded_path)
                 df_with_features = engineer_transaction_features(df_raw)
                 insights = compute_basic_insights(df_with_features)
                 df_scored = _score_transactions_with_model(
-                    df_with_features, state.model_bundle
+                    df_with_features, MODEL_BUNDLE
                 )
                 fraud_table = build_fraud_table(df_scored)
                 cluster_insights = build_cluster_insights(df_scored)
-                state.raw_df = df_raw
-                state.df_with_features = df_scored
-                state.insights = insights
-                state.fraud_table = fraud_table
-                state.cluster_insights = cluster_insights
-                if state.sample_rows is None:
+                s.raw_df = df_raw
+                s.df_with_features = df_scored
+                s.insights = insights
+                s.fraud_table = fraud_table
+                s.cluster_insights = cluster_insights
+                if s.sample_rows is None:
                     sample_rows = []
                     for _, row in df_raw.head(5).iterrows():
                         record = {}
@@ -298,7 +404,7 @@ async def dashboard_data() -> JSONResponse:
                             else:
                                 record[key] = value
                         sample_rows.append(record)
-                    state.sample_rows = sample_rows
+                    s.sample_rows = sample_rows
             except Exception:
                 raise HTTPException(
                     status_code=400,
@@ -311,7 +417,7 @@ async def dashboard_data() -> JSONResponse:
             )
 
     # I prepare spending by category for the pie chart.
-    df = state.df_with_features
+    df = s.df_with_features
     cat_group = df.groupby("category")["amount"].sum().reset_index()
     category_chart = {
         "labels": cat_group["category"].astype(str).tolist(),
@@ -319,7 +425,7 @@ async def dashboard_data() -> JSONResponse:
     }
 
     # I prepare monthly trend data.
-    monthly = state.insights.get("monthly_trends", [])
+    monthly = s.insights.get("monthly_trends", [])
 
     # I also expose a trimmed transaction table for display.
     tx_columns = [
@@ -354,14 +460,14 @@ async def dashboard_data() -> JSONResponse:
 
     return JSONResponse(
         {
-            "insights": state.insights,
+            "insights": s.insights,
             "category_chart": category_chart,
             "monthly_trends": monthly,
             "transactions": tx_records,
-            "fraud_table": state.fraud_table or [],
-            "cluster_insights": state.cluster_insights or [],
-            "user_profile": state.user_profile or {},
-            "sample_rows": state.sample_rows or [],
+            "fraud_table": s.fraud_table or [],
+            "cluster_insights": s.cluster_insights or [],
+            "user_profile": s.user_profile or {},
+            "sample_rows": s.sample_rows or [],
         }
     )
 
@@ -371,21 +477,26 @@ async def company_upload(file: UploadFile = File(...)) -> JSONResponse:
     if not file.filename.lower().endswith((".xlsx", ".xls", ".csv")):
         raise HTTPException(status_code=400, detail="Please upload an Excel or CSV file.")
 
+    session_id, session_state = _create_session_state()
+
     suffix = Path(file.filename).suffix.lower()
-    tmp_path = DATA_DIR / f"company_upload{suffix}"
+    tmp_path = DATA_DIR / f"company_upload_{session_id}{suffix}"
     contents = await file.read()
     tmp_path.write_bytes(contents)
 
     try:
         df, report = analyze_company_file(tmp_path)
     except Exception as exc:
+        session_state.ca_df = None
+        session_state.ca_report = None
+        session_state.ca_last_upload_path = None
         state.ca_df = None
         state.ca_report = None
         state.ca_last_upload_path = None
         raise HTTPException(status_code=400, detail=str(exc))
 
-    state.ca_df = df
-    state.ca_report = {
+    session_state.ca_df = df
+    session_state.ca_report = {
         "summary": report.summary,
         "monthly_trends": report.monthly_trends,
         "category_totals": report.category_totals,
@@ -393,34 +504,53 @@ async def company_upload(file: UploadFile = File(...)) -> JSONResponse:
         "charts": report.charts,
         "verified": report.verified,
     }
+    session_state.ca_last_upload_path = tmp_path
+
+    # Backwards-compatible legacy behavior (single global session).
+    state.ca_df = df
+    state.ca_report = session_state.ca_report
     state.ca_last_upload_path = tmp_path
 
-    return JSONResponse({"status": "ok"})
+    response = JSONResponse({"status": "ok"})
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=session_id,
+        httponly=True,
+        samesite="lax",
+        max_age=SESSION_TTL_SECONDS,
+    )
+    return response
 
 
 @app.get("/company_report")
-async def company_report() -> JSONResponse:
-    if state.ca_report is None:
+async def company_report(request: Request) -> JSONResponse:
+    s = _get_state_for_request(request)
+    _rehydrate_company_state_if_needed(s)
+    if s.ca_report is None:
         raise HTTPException(status_code=400, detail="Please upload a company file first.")
-    payload = dict(state.ca_report)
+    payload = dict(s.ca_report)
     payload["build"] = "verify-v2"
     return JSONResponse(payload)
 
 
 @app.get("/company_report_excel")
-async def company_report_excel(verified: bool = False) -> Response:
-    if state.ca_df is None or state.ca_report is None:
+async def company_report_excel(
+    request: Request, verified: bool = False
+) -> Response:
+    s = _get_state_for_request(request)
+    _rehydrate_company_state_if_needed(s)
+    if s.ca_df is None or s.ca_report is None:
         raise HTTPException(status_code=400, detail="Please upload a company file first.")
     try:
         report_obj = CAReport(
-            summary=state.ca_report["summary"],
-            monthly_trends=state.ca_report["monthly_trends"],
-            category_totals=state.ca_report["category_totals"],
-            anomalies=state.ca_report["anomalies"],
-            charts=state.ca_report["charts"],
-            verified=state.ca_report["verified"],
+            summary=s.ca_report["summary"],
+            monthly_trends=s.ca_report["monthly_trends"],
+            category_totals=s.ca_report["category_totals"],
+            anomalies=s.ca_report["anomalies"],
+            charts=s.ca_report["charts"],
+            verified=s.ca_report["verified"],
         )
-        content = build_excel_report(state.ca_df, report_obj, verified_only=verified)
+        content = build_excel_report(s.ca_df, report_obj, verified_only=verified)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -432,18 +562,22 @@ async def company_report_excel(verified: bool = False) -> Response:
 
 
 @app.get("/company_report_pdf")
-async def company_report_pdf() -> Response:
-    if state.ca_report is None:
+async def company_report_pdf(request: Request) -> Response:
+    s = _get_state_for_request(request)
+    _rehydrate_company_state_if_needed(s)
+    if s.ca_report is None:
         raise HTTPException(status_code=400, detail="Please upload a company file first.")
     report_obj = CAReport(
-        summary=state.ca_report["summary"],
-        monthly_trends=state.ca_report["monthly_trends"],
-        category_totals=state.ca_report["category_totals"],
-        anomalies=state.ca_report["anomalies"],
-        charts=state.ca_report["charts"],
-        verified=state.ca_report["verified"],
+        summary=s.ca_report["summary"],
+        monthly_trends=s.ca_report["monthly_trends"],
+        category_totals=s.ca_report["category_totals"],
+        anomalies=s.ca_report["anomalies"],
+        charts=s.ca_report["charts"],
+        verified=s.ca_report["verified"],
     )
-    content = build_pdf_report(report_obj)
+    # Always generate a PDF (verified or review-required). The Excel export
+    # keeps the stricter "verified-only" behavior for compliance workflows.
+    content = build_pdf_report(report_obj, verified_only=False)
     return Response(
         content=content,
         media_type="application/pdf",
@@ -452,7 +586,7 @@ async def company_report_pdf() -> Response:
 
 
 @app.post("/ask_ai")
-async def ask_ai(payload: Dict[str, Any]) -> JSONResponse:
+async def ask_ai(request: Request, payload: Dict[str, Any]) -> JSONResponse:
     """
     This endpoint takes a user question from the dashboard and routes
     it through the KAVACH‑powered financial analyst defined in `genai.py`.
@@ -462,7 +596,9 @@ async def ask_ai(payload: Dict[str, Any]) -> JSONResponse:
         raise HTTPException(
             status_code=400, detail="I need a non‑empty question to answer."
         )
-    if state.insights is None or state.fraud_table is None:
+    s = _get_state_for_request(request)
+
+    if s.insights is None or s.fraud_table is None:
         raise HTTPException(
             status_code=400,
             detail="I need analyzed data before I can answer questions. "
@@ -471,8 +607,8 @@ async def ask_ai(payload: Dict[str, Any]) -> JSONResponse:
 
     answer = ask_financial_analyst(
         user_query=question,
-        insights=state.insights,
-        fraud_cases=state.fraud_table,
+        insights=s.insights,
+        fraud_cases=s.fraud_table,
     )
     return JSONResponse({"answer": answer})
 

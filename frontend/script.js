@@ -1755,6 +1755,9 @@ const Dashboard = {
     
     // Cluster insights
     this.renderClusters(data.cluster_insights || []);
+
+    // Enable export buttons once data is available.
+    DOM.$('#export-analysis')?.removeAttribute('disabled');
   },
   
   initTables() {
@@ -2385,6 +2388,8 @@ const Dashboard = {
     DOM.$('#export-analysis')?.addEventListener('click', () => this.exportReport());
     DOM.$('#export-risk')?.addEventListener('click', () => this.exportFlaggedPdf());
     DOM.$('#export-all')?.addEventListener('click', () => this.exportTable('transactions'));
+    DOM.$('#export-pdf')?.addEventListener('click', () => this.exportReport());
+    DOM.$('#export-json')?.addEventListener('click', () => this.exportJSON());
     DOM.$('#risk-global-threshold')?.addEventListener('input', (e) => {
       const val = parseFloat(e.target.value);
       Store.set('ui.riskThreshold', val);
@@ -2674,6 +2679,33 @@ const Dashboard = {
     window.URL.revokeObjectURL(url);
     
     Toast.show('Export downloaded', 'success');
+  },
+
+  exportJSON() {
+    const transactions = Store.get('transactions') || [];
+    const insights = Store.get('insights') || {};
+
+    const payload = {
+      generated_at: new Date().toISOString(),
+      user_profile: Store.get('userProfile') || {},
+      insights,
+      transactions,
+      flagged_transactions: this.tables.fraud?.filteredData || [],
+      category_chart: Store.get('categoryChart') || { labels: [], values: [] },
+      monthly_trends: Store.get('monthlyTrends') || [],
+      sample_rows: Store.get('sampleRows') || [],
+    };
+
+    const jsonStr = JSON.stringify(payload, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `kavach-export-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+
+    Toast.show('JSON exported', 'success');
   },
 
   exportFlaggedPdf() {
