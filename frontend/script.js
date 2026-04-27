@@ -1313,9 +1313,12 @@ const AIChat = {
     
     // Suggested questions
     this.log?.addEventListener('click', (e) => {
-      if (e.target.classList.contains('chip-suggestion')) {
-        this.input.value = e.target.textContent;
-        this.form.dispatchEvent(new Event('submit'));
+      const chip = e.target.closest('.chip-suggestion');
+      if (chip) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.input.value = chip.textContent.trim();
+        this.handleSubmit({ preventDefault: () => {} });
       }
     });
     
@@ -1336,18 +1339,26 @@ const AIChat = {
     fetch('/ask_ai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question })
+      body: JSON.stringify({ question }),
+      credentials: 'include'
     })
-    .then(res => res.json())
-    .then(data => {
-      this.hideTyping();
-      this.typeMessage(data.answer || 'I could not generate a response.');
-    })
-    .catch(err => {
-      this.hideTyping();
-      this.addAIMessage('I encountered an error. Please try again.');
-      console.error('AI Error:', err);
-    });
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const message = data?.detail || 'I could not process this request right now.';
+          throw new Error(message);
+        }
+        return data;
+      })
+      .then((data) => {
+        this.hideTyping();
+        this.typeMessage(data.answer || 'I could not generate a response.');
+      })
+      .catch((err) => {
+        this.hideTyping();
+        this.addAIMessage(err.message || 'I encountered an error. Please try again.');
+        console.error('AI Error:', err);
+      });
   },
   
   addUserMessage(text) {
@@ -1432,9 +1443,9 @@ const AIChat = {
         <div class="message-content">
           <p>Chat cleared. How can I help you analyze your data?</p>
           <div class="suggested-questions">
-            <button class="chip chip-suggestion">What are the top risk factors?</button>
-            <button class="chip chip-suggestion">Show me unusual patterns</button>
-            <button class="chip chip-suggestion">Explain this user's behavior</button>
+            <button type="button" class="chip chip-suggestion">What are the top risk factors?</button>
+            <button type="button" class="chip chip-suggestion">Show me unusual patterns</button>
+            <button type="button" class="chip chip-suggestion">Explain this user's behavior</button>
           </div>
         </div>
       </div>
