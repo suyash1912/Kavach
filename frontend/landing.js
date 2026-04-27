@@ -314,15 +314,19 @@
 
   function applyStoredTheme() {
     const theme = localStorage.getItem('kavach_theme') || 'aurora-core';
-    const valid = new Set(['aurora-core', 'sweet-dark', 'dreamy', 'solar-copper']);
-    document.body.setAttribute('data-theme', valid.has(theme) ? theme : 'aurora-core');
+    const migrated = theme === 'dreamy' ? 'aurora-core' : theme;
+    const valid = new Set(['aurora-core', 'sweet-dark', 'quantum-nebula', 'solar-copper']);
+    const selected = valid.has(migrated) ? migrated : 'aurora-core';
+    document.body.setAttribute('data-theme', selected);
+    localStorage.setItem('kavach_theme', selected);
   }
 
   function initThemePicker() {
     const picker = document.querySelector('#theme-select');
     if (!picker) return;
     const theme = localStorage.getItem('kavach_theme') || 'aurora-core';
-    picker.value = theme;
+    const migrated = theme === 'dreamy' ? 'aurora-core' : theme;
+    picker.value = migrated;
     picker.addEventListener('change', (e) => {
       const value = e.target.value;
       localStorage.setItem('kavach_theme', value);

@@ -64,7 +64,7 @@
         <select id="theme-select" class="theme-select" aria-label="Select theme">
           <option value="aurora-core">Aurora Core</option>
           <option value="sweet-dark">Sweet Dark</option>
-          <option value="dreamy">Dreamy</option>
+          <option value="quantum-nebula">Quantum Nebula</option>
           <option value="solar-copper">Solar Copper</option>
         </select>
       </div>
@@ -438,7 +438,7 @@
             </div>
           </div>
           
-          <form id="ai-form" class="ai-form">
+          <form id="ai-form" class="ai-form" novalidate>
             <div class="ai-input-wrapper">
               <input
                 type="text"
@@ -447,7 +447,7 @@
                 autocomplete="off"
                 aria-label="Ask AI analyst"
               />
-              <button type="submit" class="primary-btn btn-icon" aria-label="Send message">
+              <button type="button" id="ai-send" class="primary-btn btn-icon" aria-label="Send message">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="22" y1="2" x2="11" y2="13"/>
                   <polygon points="22 2 15 22 11 13 2 9 22 2"/>

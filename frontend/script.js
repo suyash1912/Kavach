@@ -771,14 +771,14 @@ const ChartManager = {
         riskLow: '#22c55e'
       };
     }
-    if (theme === 'dreamy') {
+    if (theme === 'quantum-nebula') {
       return {
-        primary: '#c49362',
-        secondary: '#8b5a3c',
-        accent: '#b07a4f',
-        riskHigh: '#9b4a32',
-        riskMed: '#c07a4a',
-        riskLow: '#8a6a54'
+        primary: '#0ea5e9',
+        secondary: '#4c1d95',
+        accent: '#1e1b4b',
+        riskHigh: '#22d3ee',
+        riskMed: '#60a5fa',
+        riskLow: '#818cf8'
       };
     }
     return {
@@ -1158,13 +1158,14 @@ const ChartManager = {
 
 const ThemeManager = {
   key: 'kavach_theme',
-  valid: new Set(['aurora-core', 'sweet-dark', 'dreamy', 'solar-copper']),
+  valid: new Set(['aurora-core', 'sweet-dark', 'quantum-nebula', 'solar-copper']),
 
   init() {
     const saved = localStorage.getItem(this.key) || 'aurora-core';
-    this.applyTheme(saved);
+    const migrated = saved === 'dreamy' ? 'aurora-core' : saved;
+    this.applyTheme(migrated);
     const select = DOM.$('#theme-select');
-    if (select) select.value = localStorage.getItem(this.key) || 'aurora-core';
+    if (select) select.value = this.valid.has(migrated) ? migrated : 'aurora-core';
   },
 
   applyTheme(theme) {
@@ -1291,14 +1292,27 @@ const AIChat = {
   log: null,
   form: null,
   input: null,
+  sendBtn: null,
   isTyping: false,
   
   init() {
     this.log = DOM.$('#ai-chat-log');
     this.form = DOM.$('#ai-form');
     this.input = DOM.$('#ai-input');
+    this.sendBtn = DOM.$('#ai-send');
     
-    this.form?.addEventListener('submit', (e) => this.handleSubmit(e));
+    // Hard-stop native form navigation no matter what.
+    this.form?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+    this.sendBtn?.addEventListener('click', (e) => this.handleSubmit(e));
+    this.input?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.handleSubmit(e);
+      }
+    });
     
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
@@ -1318,7 +1332,7 @@ const AIChat = {
         e.preventDefault();
         e.stopPropagation();
         this.input.value = chip.textContent.trim();
-        this.handleSubmit({ preventDefault: () => {} });
+        this.handleSubmit(e);
       }
     });
     
@@ -1326,7 +1340,8 @@ const AIChat = {
   },
   
   handleSubmit(e) {
-    e.preventDefault();
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
     if (this.isTyping) return;
     
     const question = this.input.value.trim();

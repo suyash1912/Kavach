@@ -14,8 +14,9 @@
   const themeSelect = $('#theme-select');
 
   function applyTheme(theme) {
-    const valid = new Set(['aurora-core', 'sweet-dark', 'dreamy', 'solar-copper']);
-    const selected = valid.has(theme) ? theme : 'aurora-core';
+    const migrated = theme === 'dreamy' ? 'aurora-core' : theme;
+    const valid = new Set(['aurora-core', 'sweet-dark', 'quantum-nebula', 'solar-copper']);
+    const selected = valid.has(migrated) ? migrated : 'aurora-core';
     document.body.setAttribute('data-theme', selected);
     localStorage.setItem('kavach_theme', selected);
     if (themeSelect) themeSelect.value = selected;

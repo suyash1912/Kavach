@@ -102,101 +102,150 @@ body[data-theme="sweet-dark"] .glass {
   border-color: rgba(236, 72, 153, 0.25);
 }
 
-body[data-theme="dreamy"] {
-  --color-bg: #f7f2ea;
-  --color-surface: rgba(250, 246, 238, 0.9);
-  --color-surface-elevated: rgba(245, 238, 228, 0.95);
-  --color-border: rgba(122, 74, 38, 0.25);
-  --text-primary: #3f2a1d;
-  --text-secondary: #6b4a32;
-  --text-muted: #8a6a54;
-  --accent-teal: #8b5a3c;
-  --accent-cyan: #b07a4f;
-  --accent-amber: #c49362;
-  --accent-rose: #9b5c3d;
-  --risk-high: #9b4a32;
-  --risk-medium: #c07a4a;
-  --risk-low: #8a6a54;
-  --font-sans: "Nunito", system-ui, sans-serif;
-  --font-serif: "DM Serif Display", serif;
+body[data-theme="quantum-nebula"],
+body[data-theme="quantum"] {
+  --bg-primary: #020617;
+  --bg-secondary: #0b0f1a;
+  --bg-glass: rgba(11, 15, 26, 0.78);
+  --text-primary: #e2e8f0;
+  --text-secondary: #9fb1d9;
+  --accent: #0ea5e9;
+  --accent-glow: rgba(14, 165, 233, 0.45);
+  --border: rgba(125, 106, 227, 0.36);
+  --card-bg: rgba(9, 12, 30, 0.84);
+  --shadow: 0 24px 62px rgba(2, 6, 23, 0.9);
+
+  --color-bg: var(--bg-primary);
+  --color-surface: var(--bg-glass);
+  --color-surface-elevated: var(--card-bg);
+  --color-border: var(--border);
+  --text-muted: #6b7aa2;
+  --accent-teal: #0ea5e9;
+  --accent-cyan: #22d3ee;
+  --accent-amber: #818cf8;
+  --accent-rose: #a78bfa;
+  --risk-high: #22d3ee;
+  --risk-medium: #60a5fa;
+  --risk-low: #818cf8;
+  --font-sans: "Manrope", system-ui, sans-serif;
+  --font-serif: "Fraunces", serif;
 }
 
-body[data-theme="dreamy"] {
+body[data-theme="quantum-nebula"],
+body[data-theme="quantum"] {
   background-image:
-    radial-gradient(circle at 15% 20%, rgba(176, 122, 79, 0.22), transparent 60%),
-    radial-gradient(circle at 85% 70%, rgba(196, 147, 98, 0.2), transparent 60%),
-    linear-gradient(180deg, rgba(250, 246, 238, 0.9), rgba(244, 236, 224, 0.9));
+    radial-gradient(circle at 12% 12%, rgba(14, 165, 233, 0.2), transparent 58%),
+    radial-gradient(circle at 82% 18%, rgba(76, 29, 149, 0.32), transparent 55%),
+    radial-gradient(circle at 68% 78%, rgba(30, 27, 75, 0.38), transparent 60%),
+    linear-gradient(140deg, #020617 0%, #0b0f1a 46%, #1e1b4b 76%, #4c1d95 100%);
+  background-size: 210% 210%;
+  animation: bg-pan 28s ease-in-out infinite alternate;
 }
 
-body[data-theme="dreamy"] .glass {
-  background: radial-gradient(circle at 0 0, rgba(176, 122, 79, 0.12), transparent 60%), var(--color-surface);
-  border-color: rgba(122, 74, 38, 0.25);
+body[data-theme="quantum-nebula"] .glass,
+body[data-theme="quantum"] .glass {
+  background:
+    radial-gradient(circle at 8% 0, rgba(14, 165, 233, 0.18), transparent 56%),
+    radial-gradient(circle at 92% 100%, rgba(167, 139, 250, 0.16), transparent 60%),
+    var(--color-surface);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow), 0 0 42px rgba(14, 165, 233, 0.14);
 }
 
-body[data-theme="dreamy"] .dashboard-header,
-body[data-theme="dreamy"] .landing-header {
-  background: rgba(247, 242, 234, 0.9);
-  border-bottom-color: rgba(122, 74, 38, 0.2);
+body[data-theme="quantum-nebula"] .dashboard-header,
+body[data-theme="quantum-nebula"] .landing-header,
+body[data-theme="quantum"] .dashboard-header,
+body[data-theme="quantum"] .landing-header {
+  background: rgba(2, 6, 23, 0.86);
+  border-bottom-color: rgba(96, 165, 250, 0.22);
 }
 
-body[data-theme="dreamy"] .top-tabs {
-  background: rgba(255, 255, 255, 0.7);
-  border-color: rgba(122, 74, 38, 0.2);
+body[data-theme="quantum-nebula"] .top-tabs,
+body[data-theme="quantum"] .top-tabs {
+  background: rgba(15, 23, 42, 0.64);
+  border-color: rgba(96, 165, 250, 0.28);
 }
 
-body[data-theme="dreamy"] .ghost-btn {
-  background: rgba(255, 255, 255, 0.5);
-  border-color: rgba(122, 74, 38, 0.25);
+body[data-theme="quantum-nebula"] .ghost-btn,
+body[data-theme="quantum"] .ghost-btn {
+  background: rgba(15, 23, 42, 0.45);
+  border-color: rgba(125, 106, 227, 0.38);
 }
 
-body[data-theme="dreamy"] .plotly-container,
-body[data-theme="dreamy"] .ai-chat-log,
-body[data-theme="dreamy"] .table-container,
-body[data-theme="dreamy"] .chart-wrapper {
-  background: rgba(255, 248, 240, 0.6);
+body[data-theme="quantum-nebula"] .plotly-container,
+body[data-theme="quantum-nebula"] .ai-chat-log,
+body[data-theme="quantum-nebula"] .table-container,
+body[data-theme="quantum-nebula"] .chart-wrapper,
+body[data-theme="quantum"] .plotly-container,
+body[data-theme="quantum"] .ai-chat-log,
+body[data-theme="quantum"] .table-container,
+body[data-theme="quantum"] .chart-wrapper {
+  background: rgba(7, 10, 26, 0.72);
 }
 
-body[data-theme="dreamy"] .loading-overlay {
-  background: rgba(250, 245, 235, 0.95);
+body[data-theme="quantum-nebula"] .loading-overlay,
+body[data-theme="quantum"] .loading-overlay {
+  background: rgba(2, 6, 23, 0.92);
 }
 
-body[data-theme="dreamy"] .ai-input-wrapper input,
-body[data-theme="dreamy"] .upload-form input,
-body[data-theme="dreamy"] .upload-form select,
-body[data-theme="dreamy"] .search-box input,
-body[data-theme="dreamy"] .theme-select {
-  background: rgba(255, 250, 244, 0.9);
+body[data-theme="quantum-nebula"] .ai-input-wrapper input,
+body[data-theme="quantum-nebula"] .upload-form input,
+body[data-theme="quantum-nebula"] .upload-form select,
+body[data-theme="quantum-nebula"] .search-box input,
+body[data-theme="quantum-nebula"] .theme-select,
+body[data-theme="quantum"] .ai-input-wrapper input,
+body[data-theme="quantum"] .upload-form input,
+body[data-theme="quantum"] .upload-form select,
+body[data-theme="quantum"] .search-box input,
+body[data-theme="quantum"] .theme-select {
+  background: rgba(9, 13, 34, 0.88);
   color: var(--text-primary);
-  border-color: rgba(122, 74, 38, 0.25);
+  border-color: rgba(125, 106, 227, 0.35);
 }
 
-body[data-theme="dreamy"] .ai-input-wrapper input::placeholder,
-body[data-theme="dreamy"] .search-box input::placeholder {
-  color: rgba(107, 74, 50, 0.6);
+body[data-theme="quantum-nebula"] .ai-input-wrapper input::placeholder,
+body[data-theme="quantum-nebula"] .search-box input::placeholder,
+body[data-theme="quantum"] .ai-input-wrapper input::placeholder,
+body[data-theme="quantum"] .search-box input::placeholder {
+  color: rgba(159, 177, 217, 0.7);
 }
 
-body[data-theme="dreamy"] .primary-btn {
-  background: linear-gradient(135deg, #c49362, #8b5a3c);
-  color: #fffaf4;
-  box-shadow: 0 6px 22px rgba(139, 90, 60, 0.3);
+body[data-theme="quantum-nebula"] .primary-btn,
+body[data-theme="quantum"] .primary-btn {
+  background: linear-gradient(135deg, #0ea5e9, #22d3ee 55%, #818cf8);
+  color: #020617;
+  box-shadow: 0 8px 26px rgba(14, 165, 233, 0.34);
 }
 
-body[data-theme="dreamy"] .badge {
-  background: rgba(255, 250, 244, 0.7);
-  border-color: rgba(122, 74, 38, 0.2);
-  color: #6b4a32;
+body[data-theme="quantum-nebula"] .primary-btn:hover,
+body[data-theme="quantum"] .primary-btn:hover,
+body[data-theme="quantum-nebula"] .card:hover,
+body[data-theme="quantum-nebula"] .kpi-card:hover,
+body[data-theme="quantum"] .card:hover,
+body[data-theme="quantum"] .kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px rgba(14, 165, 233, 0.22), 0 0 30px rgba(129, 140, 248, 0.2);
 }
 
-body[data-theme="dreamy"] .ai-panel {
-  border-color: rgba(139, 90, 60, 0.25);
+body[data-theme="quantum-nebula"] .badge,
+body[data-theme="quantum"] .badge {
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(96, 165, 250, 0.26);
+  color: #c7d2fe;
 }
 
-body[data-theme="dreamy"]::before {
-  opacity: 0.12;
+body[data-theme="quantum-nebula"] .ai-panel,
+body[data-theme="quantum"] .ai-panel {
+  border-color: rgba(125, 106, 227, 0.35);
+}
+
+body[data-theme="quantum-nebula"]::before,
+body[data-theme="quantum"]::before {
+  opacity: 0.1;
   background-image:
-    radial-gradient(rgba(95, 61, 38, 0.18) 1px, transparent 1px),
-    radial-gradient(rgba(140, 96, 64, 0.12) 1px, transparent 1px);
-  background-size: 140px 140px, 220px 220px;
+    radial-gradient(rgba(14, 165, 233, 0.18) 1px, transparent 1px),
+    radial-gradient(rgba(129, 140, 248, 0.14) 1px, transparent 1px);
+  background-size: 150px 150px, 240px 240px;
 }
 
 body[data-theme="sweet-dark"] .glass {
@@ -223,38 +272,44 @@ body[data-theme="sweet-dark"] .icon-btn:hover {
 }
 
 
-body[data-theme="dreamy"] .tab-pill-active {
-  background: linear-gradient(135deg, #c49362, #8b5a3c);
-  color: #fffaf4;
+body[data-theme="quantum-nebula"] .tab-pill-active,
+body[data-theme="quantum"] .tab-pill-active {
+  background: linear-gradient(135deg, #0ea5e9, #818cf8);
+  color: #020617;
 }
 
-body[data-theme="dreamy"] .icon-btn:hover {
-  background: rgba(196, 147, 98, 0.18);
-  color: #3f2a1d;
+body[data-theme="quantum-nebula"] .icon-btn:hover,
+body[data-theme="quantum"] .icon-btn:hover {
+  background: rgba(14, 165, 233, 0.16);
+  color: #e2e8f0;
 }
 
-body[data-theme="dreamy"] .logo-mark {
-  background: linear-gradient(135deg, #c49362, #8b5a3c);
-  color: #fffaf4;
-  box-shadow: 0 0 18px rgba(139, 90, 60, 0.4);
+body[data-theme="quantum-nebula"] .logo-mark,
+body[data-theme="quantum"] .logo-mark {
+  background: linear-gradient(135deg, #22d3ee, #4c1d95);
+  color: #020617;
+  box-shadow: 0 0 24px rgba(14, 165, 233, 0.44);
 }
 
-body[data-theme="dreamy"] .risk-badge.risk-high {
-  background: rgba(155, 74, 50, 0.2);
-  border-color: rgba(155, 74, 50, 0.4);
-  color: #9b4a32;
+body[data-theme="quantum-nebula"] .risk-badge.risk-high,
+body[data-theme="quantum"] .risk-badge.risk-high {
+  background: rgba(34, 211, 238, 0.2);
+  border-color: rgba(34, 211, 238, 0.45);
+  color: #67e8f9;
 }
 
-body[data-theme="dreamy"] .risk-badge.risk-medium {
-  background: rgba(192, 122, 74, 0.2);
-  border-color: rgba(192, 122, 74, 0.4);
-  color: #c07a4a;
+body[data-theme="quantum-nebula"] .risk-badge.risk-medium,
+body[data-theme="quantum"] .risk-badge.risk-medium {
+  background: rgba(96, 165, 250, 0.2);
+  border-color: rgba(96, 165, 250, 0.42);
+  color: #93c5fd;
 }
 
-body[data-theme="dreamy"] .risk-badge.risk-low {
-  background: rgba(138, 106, 84, 0.2);
-  border-color: rgba(138, 106, 84, 0.4);
-  color: #8a6a54;
+body[data-theme="quantum-nebula"] .risk-badge.risk-low,
+body[data-theme="quantum"] .risk-badge.risk-low {
+  background: rgba(129, 140, 248, 0.18);
+  border-color: rgba(129, 140, 248, 0.4);
+  color: #c4b5fd;
 }
 
 body[data-theme="solar-copper"] {
@@ -683,10 +738,11 @@ a:hover {
   overflow: hidden;
 }
 
-body[data-theme="dreamy"] .tab-pill .pro-badge {
-  background: linear-gradient(135deg, #f3b67a, #c9794a);
-  color: #3f2a1d;
-  box-shadow: 0 4px 18px rgba(201, 121, 74, 0.35);
+body[data-theme="quantum-nebula"] .tab-pill .pro-badge,
+body[data-theme="quantum"] .tab-pill .pro-badge {
+  background: linear-gradient(135deg, #22d3ee, #818cf8);
+  color: #020617;
+  box-shadow: 0 4px 18px rgba(129, 140, 248, 0.35);
 }
 
 .tab-pill .pro-badge::after {
