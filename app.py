@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from pathlib import Path
 import time
 import uuid
@@ -35,7 +36,7 @@ from pydantic import BaseModel, Field
 import uvicorn
 
 from features import engineer_transaction_features
-from genai import ask_financial_analyst
+from genai import DEFAULT_MODEL, ask_financial_analyst
 from ingestion import load_transactions_excel
 from insights import build_cluster_insights, build_fraud_table, compute_basic_insights
 from company_accountant import analyze_company_file, build_excel_report, build_pdf_report, CAReport
@@ -722,6 +723,23 @@ async def ask_ai(request: Request, payload: AskAIRequest) -> JSONResponse:
         fraud_cases=s.fraud_table,
     )
     return JSONResponse({"answer": answer})
+
+
+@app.get("/ai_status")
+async def ai_status() -> JSONResponse:
+    key_present = bool(os.environ.get("OPENROUTER_KEY", "").strip())
+    return JSONResponse(
+        {
+            "provider": "openrouter",
+            "model": DEFAULT_MODEL,
+            "available": key_present,
+            "message": (
+                "AI analyst is ready."
+                if key_present
+                else "OPENROUTER_KEY is not configured."
+            ),
+        }
+    )
 
 
 @app.get("/model_info")

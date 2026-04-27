@@ -1346,6 +1346,12 @@ const AIChat = {
     
     const question = this.input.value.trim();
     if (!question) return;
+
+    const aiBadge = DOM.$('#ai-status');
+    if (aiBadge?.classList.contains('badge-alert')) {
+      this.addAIMessage('AI Analyst is currently unavailable. Please set OPENROUTER_KEY in your server environment and refresh.');
+      return;
+    }
     
     this.addUserMessage(question);
     this.input.value = '';
@@ -1711,6 +1717,7 @@ const Dashboard = {
     this.initTables();
     this.showSkeletons();
     this.applyAdvancedVisibility();
+    await this.loadAIStatus();
     
     // Check if we have data
     await this.loadData();
@@ -1746,6 +1753,31 @@ const Dashboard = {
       if (!hasVisibleData) {
         Toast.show('Failed to load dashboard data', 'error');
       }
+    }
+  },
+
+  async loadAIStatus() {
+    const badge = DOM.$('#ai-status');
+    if (!badge) return;
+    try {
+      const result = await API.getJson(['/ai_status']);
+      const status = result?.data || {};
+      const available = Boolean(status.available);
+      badge.classList.remove('badge-green', 'badge-amber', 'badge-alert');
+      badge.classList.add(available ? 'badge-green' : 'badge-alert');
+      badge.innerHTML = `<span class="status-dot${available ? ' pulse' : ''}"></span> ${available ? 'AI Ready' : 'AI Offline'}`;
+      const label = available
+        ? `AI service ready (${status.provider || 'provider'} / ${status.model || 'model'})`
+        : 'AI service unavailable: OPENROUTER_KEY not configured';
+      badge.setAttribute('aria-label', label);
+      badge.setAttribute('title', label);
+    } catch (error) {
+      badge.classList.remove('badge-green', 'badge-amber');
+      badge.classList.add('badge-alert');
+      badge.innerHTML = '<span class="status-dot"></span> AI Offline';
+      badge.setAttribute('aria-label', 'AI service unavailable');
+      badge.setAttribute('title', 'AI service unavailable');
+      console.warn('AI status check failed', error);
     }
   },
   
