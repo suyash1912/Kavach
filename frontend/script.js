@@ -103,6 +103,59 @@ const DOM = {
   }
 };
 
+const API = {
+  inferBase() {
+    const { protocol, hostname, port } = window.location;
+    if ((hostname === '127.0.0.1' || hostname === 'localhost') && port === '8000') {
+      return '';
+    }
+    return `${protocol}//127.0.0.1:8000`;
+  },
+
+  async getJson(paths) {
+    const candidates = [];
+    const base = this.inferBase();
+    paths.forEach((path) => {
+      candidates.push(path);
+      if (base) candidates.push(`${base}${path}`);
+    });
+
+    let lastError = null;
+    for (const url of candidates) {
+      let timer = null;
+      try {
+        const controller = new AbortController();
+        timer = setTimeout(() => controller.abort(), 15000);
+        const response = await fetch(url, { credentials: 'include', signal: controller.signal });
+        clearTimeout(timer);
+        if (!response.ok) {
+          if (response.status === 400) return { status: 400, data: null };
+          lastError = new Error(`HTTP ${response.status} for ${url}`);
+          continue;
+        }
+        const payload = await response.json();
+        if (payload && typeof payload === 'object' && 'status' in payload && 'data' in payload) {
+          return { status: 200, data: payload.data };
+        }
+        return { status: 200, data: payload };
+      } catch (err) {
+        lastError = err;
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    }
+
+    throw lastError || new Error('Failed to fetch API payload');
+  }
+};
+
+const escapeHtml = (value) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
 // ==========================================
 // Motion Utilities
 // ==========================================
@@ -279,6 +332,8 @@ class DataTable {
     this.sortColumn = null;
     this.sortDirection = 'asc';
     this.onRowClick = options.onRowClick || null;
+    this.infoElementId = options.infoElementId || `${tableId.replace('-table', '')}-table-info`;
+    this.paginationElementId = options.paginationElementId || `${tableId.replace('-table', '')}-pagination`;
     
     this.init();
   }
@@ -382,7 +437,7 @@ class DataTable {
     }
     
     // Update info text
-    const infoEl = DOM.$(`#${this.table.id.replace('-table', '')}-table-info`);
+    const infoEl = DOM.$(`#${this.infoElementId}`);
     if (infoEl) {
       if (this.filteredData.length === 0) {
         infoEl.textContent = 'Showing 0 of 0';
@@ -414,8 +469,12 @@ class DataTable {
   
   updatePagination() {
     const totalPages = Math.ceil(this.filteredData.length / this.pageSize);
-    const container = DOM.$(`#${this.table.id.replace('-table', '')}-pagination`);
-    if (!container || totalPages <= 1) return;
+    const container = DOM.$(`#${this.paginationElementId}`);
+    if (!container) return;
+    if (totalPages <= 1) {
+      container.innerHTML = '';
+      return;
+    }
     
     const fragment = document.createDocumentFragment();
     
@@ -590,11 +649,11 @@ class FraudTable extends DataTable {
         <div class="detail-grid">
           <div class="detail-item">
             <span class="detail-label">Transaction ID</span>
-            <span class="detail-value">${tx.id || 'N/A'}</span>
+            <span class="detail-value">${escapeHtml(tx.id || 'N/A')}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">User ID</span>
-            <span class="detail-value">${tx.user_id}</span>
+            <span class="detail-value">${escapeHtml(tx.user_id)}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">Amount</span>
@@ -608,19 +667,19 @@ class FraudTable extends DataTable {
           </div>
           <div class="detail-item">
             <span class="detail-label">Timestamp</span>
-            <span class="detail-value">${tx.timestamp}</span>
+            <span class="detail-value">${escapeHtml(tx.timestamp)}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">Merchant</span>
-            <span class="detail-value">${tx.merchant}</span>
+            <span class="detail-value">${escapeHtml(tx.merchant)}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">Category</span>
-            <span class="detail-value">${tx.category}</span>
+            <span class="detail-value">${escapeHtml(tx.category)}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">Country</span>
-            <span class="detail-value">${tx.country}</span>
+            <span class="detail-value">${escapeHtml(tx.country)}</span>
           </div>
         </div>
         <div class="detail-flags">
@@ -676,6 +735,9 @@ class FraudTable extends DataTable {
 
 const ChartManager = {
   instances: {},
+  chartReady() {
+    return typeof window.Chart !== 'undefined';
+  },
 
   themePalette() {
     const theme = document.body.getAttribute('data-theme') || 'kavach';
@@ -740,6 +802,7 @@ const ChartManager = {
   },
   
   createCategoryChart(canvasId, data, type = 'doughnut') {
+    if (!this.chartReady()) return null;
     const ctx = DOM.$(`#${canvasId}`)?.getContext('2d');
     if (!ctx) return;
 
@@ -813,6 +876,7 @@ const ChartManager = {
   },
   
   createTrendChart(canvasId, data) {
+    if (!this.chartReady()) return null;
     const ctx = DOM.$(`#${canvasId}`)?.getContext('2d');
     if (!ctx) return;
 
@@ -889,6 +953,7 @@ const ChartManager = {
   },
 
   createVelocityChart(canvasId, transactions) {
+    if (!this.chartReady()) return null;
     const ctx = DOM.$(`#${canvasId}`)?.getContext('2d');
     if (!ctx) return;
 
@@ -1463,9 +1528,9 @@ const UploadManager = {
   },
   
   validateFile(file) {
-    const maxSize = 50 * 1024 * 1024; // 50MB
+    const maxSize = 20 * 1024 * 1024; // 20MB (must match backend)
     if (file.size > maxSize) {
-      Toast.show('File size exceeds 50MB limit', 'error');
+      Toast.show('File size exceeds 20MB limit', 'error');
       return false;
     }
     return true;
@@ -1601,6 +1666,7 @@ const Dashboard = {
   tables: {},
   orbitTimer: null,
   orbitAngle: 0,
+  chartRetryTimer: null,
   stats: {
     user: new Map(),
     country: new Map()
@@ -1632,17 +1698,12 @@ const Dashboard = {
   
   async loadData() {
     try {
-      const response = await fetch('/dashboard_data');
-      if (!response.ok) {
-        if (response.status === 400) {
-          // No data yet, show empty state
-          this.hideSkeletons(true);
-          return;
-        }
-        throw new Error('Failed to load dashboard data');
+      const result = await API.getJson(['/dashboard_data', '/api/v1/dashboard_data']);
+      if (result.status === 400 || !result.data) {
+        this.hideSkeletons(true);
+        return;
       }
-      
-      const data = await response.json();
+      const data = result.data;
       Store.set('transactions', data.transactions || []);
       Store.set('insights', data.insights || {});
       Store.set('categoryChart', data.category_chart || { labels: [], values: [] });
@@ -1655,7 +1716,10 @@ const Dashboard = {
     } catch (error) {
       console.error('Dashboard load error:', error);
       this.hideSkeletons(true);
-      Toast.show('Failed to load dashboard data', 'error');
+      const hasVisibleData = (Store.get('transactions') || []).length > 0;
+      if (!hasVisibleData) {
+        Toast.show('Failed to load dashboard data', 'error');
+      }
     }
   },
   
@@ -1747,10 +1811,19 @@ const Dashboard = {
     
     // 3D Viz
     if (filtered?.length > 0) {
-      setTimeout(() => {
-        ChartManager.createPlotly3D('plotly-3d', filtered);
-        this.togglePlotlyOrbit();
-      }, 500);
+      const render3d = () => {
+        try {
+          ChartManager.createPlotly3D('plotly-3d', filtered);
+          this.togglePlotlyOrbit();
+        } catch (e) {
+          console.warn('3D chart render failed', e);
+        }
+      };
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(render3d, { timeout: 1000 });
+      } else {
+        setTimeout(render3d, 500);
+      }
     }
     
     // Cluster insights
@@ -1763,11 +1836,15 @@ const Dashboard = {
   initTables() {
     this.tables.transactions = new TransactionTable('transactions-table', {
       pageSize: 25,
-      searchable: true
+      searchable: true,
+      infoElementId: 'tx-table-info',
+      paginationElementId: 'tx-pagination'
     });
     
     this.tables.fraud = new FraudTable('fraud-table', {
-      pageSize: 10
+      pageSize: 10,
+      infoElementId: 'fraud-table-info',
+      paginationElementId: 'fraud-pagination'
     });
 
     DOM.$('#fraud-table')?.classList.add('animate-rows');
@@ -1920,7 +1997,7 @@ const Dashboard = {
       </div>
       <div class="drawer-card">
         <div class="detail-label">Top Merchant</div>
-        <div class="detail-value">${topMerchantName}</div>
+        <div class="detail-value">${escapeHtml(topMerchantName)}</div>
       </div>
       <div class="drawer-card">
         <div class="detail-label">Transactions</div>
@@ -1969,7 +2046,7 @@ const Dashboard = {
     rows.push(`
       <div class="heatmap-row">
         <div class="heatmap-cell heatmap-label">Category</div>
-        ${topCountries.map(c => `<div class="heatmap-cell">${c}</div>`).join('')}
+        ${topCountries.map(c => `<div class="heatmap-cell">${escapeHtml(c)}</div>`).join('')}
       </div>
     `);
 
@@ -1985,7 +2062,7 @@ const Dashboard = {
 
       rows.push(`
         <div class="heatmap-row">
-          <div class="heatmap-cell heatmap-label">${cat}</div>
+          <div class="heatmap-cell heatmap-label">${escapeHtml(cat)}</div>
           ${cells}
         </div>
       `);
@@ -2022,8 +2099,8 @@ const Dashboard = {
     if (!selectA || !selectB || !btn || !grid) return;
 
     const users = Array.from(new Set(transactions.map(tx => tx.user_id))).filter(Boolean).slice(0, 50);
-    selectA.innerHTML = users.map(u => `<option value="${u}">${u}</option>`).join('');
-    selectB.innerHTML = users.map(u => `<option value="${u}">${u}</option>`).join('');
+    selectA.innerHTML = users.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
+    selectB.innerHTML = users.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
     if (users.length > 1) selectB.value = users[1];
 
     const summarize = (userId) => {
@@ -2321,13 +2398,18 @@ const Dashboard = {
   },
   
   initCharts(data) {
+    if (!ChartManager.chartReady()) {
+      if (this.chartRetryTimer) clearTimeout(this.chartRetryTimer);
+      this.chartRetryTimer = setTimeout(() => this.initCharts(data), 300);
+      return;
+    }
     const catData = data.category_chart || { labels: [], values: [] };
     const monthlyData = data.monthly_trends || [];
-    
-    ChartManager.createCategoryChart('categoryChart', catData, 'doughnut');
-    ChartManager.createTrendChart('monthlyChart', monthlyData);
-    ChartManager.createVelocityChart('velocityChart', data.transactions || []);
-    ChartManager.createGeoMap('geo-map', data.transactions || []);
+
+    try { ChartManager.createCategoryChart('categoryChart', catData, 'doughnut'); } catch (e) { console.warn('Category chart render failed', e); }
+    try { ChartManager.createTrendChart('monthlyChart', monthlyData); } catch (e) { console.warn('Trend chart render failed', e); }
+    try { ChartManager.createVelocityChart('velocityChart', data.transactions || []); } catch (e) { console.warn('Velocity chart render failed', e); }
+    try { ChartManager.createGeoMap('geo-map', data.transactions || []); } catch (e) { console.warn('Geo map render failed', e); }
 
     const countsByDay = new Map();
     (data.transactions || []).forEach(tx => {
@@ -2350,7 +2432,11 @@ const Dashboard = {
       btn.addEventListener('click', () => {
         DOM.$$('.chart-type').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        ChartManager.createCategoryChart('categoryChart', catData, btn.dataset.type);
+        try {
+          ChartManager.createCategoryChart('categoryChart', catData, btn.dataset.type);
+        } catch (e) {
+          console.warn('Category chart toggle render failed', e);
+        }
       });
     });
   },
@@ -2497,12 +2583,12 @@ const Dashboard = {
     // Watermark
     doc.setTextColor(80, 98, 120);
     doc.setFontSize(64);
-    doc.setGState(new doc.GState({ opacity: 0.06 }));
+    this.setPdfOpacity(doc, 0.06);
     doc.text('KAVACH', doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() / 2, {
       align: 'center',
       angle: 25
     });
-    doc.setGState(new doc.GState({ opacity: 1 }));
+    this.setPdfOpacity(doc, 1);
 
     // Header band
     doc.setFillColor(12, 18, 36);
@@ -2730,12 +2816,12 @@ const Dashboard = {
     // Watermark
     doc.setTextColor(80, 98, 120);
     doc.setFontSize(60);
-    doc.setGState(new doc.GState({ opacity: 0.08 }));
+    this.setPdfOpacity(doc, 0.08);
     doc.text('KAVACH', doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() / 2, {
       align: 'center',
       angle: 25
     });
-    doc.setGState(new doc.GState({ opacity: 1 }));
+    this.setPdfOpacity(doc, 1);
 
     doc.setFillColor(12, 18, 36);
     doc.rect(0, 0, doc.internal.pageSize.getWidth(), 80, 'F');
@@ -2815,6 +2901,12 @@ const Dashboard = {
       }).join(',')
     );
     return [headers.join(','), ...rows].join('\n');
+  },
+
+  setPdfOpacity(doc, opacity) {
+    if (typeof doc.setGState === 'function' && typeof doc.GState === 'function') {
+      doc.setGState(new doc.GState({ opacity }));
+    }
   },
   
   initScrollReveal() {

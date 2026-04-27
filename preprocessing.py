@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 
@@ -55,6 +56,12 @@ def _prepare_base_frame(df: pd.DataFrame) -> pd.DataFrame:
         df_proc[AMOUNT_COLUMN], errors="coerce"
     ).fillna(0.0)
 
+    # I ensure core categorical fields exist and are stable strings.
+    for col in ("user_id", "category", "merchant", "country"):
+        if col not in df_proc.columns:
+            df_proc[col] = "Unknown"
+        df_proc[col] = df_proc[col].fillna("Unknown").astype(str)
+
     # I derive simple, interpretable calendar features.
     df_proc["tx_year"] = df_proc[TIMESTAMP_COLUMN].dt.year
     df_proc["tx_month"] = df_proc[TIMESTAMP_COLUMN].dt.month
@@ -90,7 +97,7 @@ def build_preprocessing_pipeline(
 
     numeric_transformer = Pipeline(
         steps=[
-            ("imputer", "passthrough"),  # I rely on fillna above for now.
+            ("imputer", SimpleImputer(strategy="median")),
             ("scaler", StandardScaler()),
         ]
     )

@@ -1,16 +1,17 @@
 """
-In this module, I implement the data ingestion layer for the KAVACH platform.
-I focus on loading Excel transaction files, validating schema, and returning
-clean pandas DataFrames that the rest of the pipeline can safely consume.
+Data ingestion layer for KAVACH.
+
+Loads CSV/Excel statements, normalizes column names, infers canonical fields,
+and returns a dataframe with stable columns for downstream modeling.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, List, Dict, Tuple
+from typing import Dict, Iterable, List
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 
 REQUIRED_COLUMNS: List[str] = [
@@ -34,32 +35,48 @@ COLUMN_ALIASES: Dict[str, List[str]] = {
 
 
 def _normalize_columns(columns: Iterable[str]) -> List[str]:
-    """
-    In this helper, I normalize column names by stripping spaces
-    and lower‑casing everything so that the ingestion step is a bit
-    more forgiving about minor formatting differences.
-    """
     return [str(c).strip().lower() for c in columns]
+
+
+def _to_datetime_relaxed(series: pd.Series) -> pd.Series:
+    """
+    Parse mixed datetime strings without emitting pandas format-inference warnings.
+    """
+    parsed = pd.to_datetime(series, errors="coerce", format="ISO8601")
+    missing = parsed.isna()
+    if missing.any():
+        parsed_mixed = pd.to_datetime(series[missing], errors="coerce", format="mixed")
+        parsed.loc[missing] = parsed_mixed
+    return parsed
 
 
 def _frame_score(df: pd.DataFrame) -> int:
     if df is None or df.empty:
         return 0
+
     non_null = int(df.notna().sum().sum())
     numeric_cols = df.select_dtypes(include=[np.number]).shape[1]
     date_like = 0
-    for c in df.columns:
-        try:
-            parsed = pd.to_datetime(df[c], errors="coerce")
-            if parsed.notna().mean() > 0.5:
-                date_like += 1
-        except Exception:
+    date_name_hints = ("date", "time", "timestamp", "posted", "month")
+
+    # Keep this cheap: inspect only likely date columns and sample a bounded slice.
+    for col in df.columns:
+        col_name = str(col).lower()
+        if not any(hint in col_name for hint in date_name_hints):
             continue
+        series = df[col].dropna()
+        if series.empty:
+            continue
+        sample = series.astype(str).head(200)
+        parsed = _to_datetime_relaxed(sample)
+        if parsed.notna().mean() > 0.5:
+            date_like += 1
+
     return non_null + numeric_cols * 50 + date_like * 25
 
 
 def _best_frame(frames: Iterable[pd.DataFrame]) -> pd.DataFrame:
-    best = None
+    best: pd.DataFrame | None = None
     best_score = -1
     for df in frames:
         score = _frame_score(df)
@@ -70,17 +87,18 @@ def _best_frame(frames: Iterable[pd.DataFrame]) -> pd.DataFrame:
 
 
 def _coerce_numeric(series: pd.Series) -> pd.Series:
-    return pd.to_numeric(
+    cleaned = (
         series.astype(str)
         .str.replace(",", "", regex=False)
         .str.replace("(", "-", regex=False)
         .str.replace(")", "", regex=False)
-        .str.replace("₹", "", regex=False)
-        .str.replace("$", "", regex=False)
-        .str.replace("€", "", regex=False)
-        .str.replace("£", "", regex=False),
-        errors="coerce",
+        .str.replace("INR", "", case=False, regex=False)
+        .str.replace("USD", "", case=False, regex=False)
+        .str.replace("EUR", "", case=False, regex=False)
+        .str.replace("GBP", "", case=False, regex=False)
+        .str.replace(r"[^\d\.\-+eE]", "", regex=True)
     )
+    return pd.to_numeric(cleaned, errors="coerce")
 
 
 def _pick_column(df: pd.DataFrame, candidates: List[str]) -> str | None:
@@ -92,27 +110,23 @@ def _pick_column(df: pd.DataFrame, candidates: List[str]) -> str | None:
 
 def _infer_columns(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-
-    # Normalize column names early.
     df.columns = _normalize_columns(df.columns)
 
-    # Timestamp inference
     ts_col = _pick_column(df, COLUMN_ALIASES["timestamp"])
     if ts_col is None:
         date_candidates = [c for c in df.columns if "date" in c or "time" in c or "month" in c]
         best = None
         best_ratio = 0.0
         for c in date_candidates:
-            parsed = pd.to_datetime(df[c], errors="coerce")
+            parsed = _to_datetime_relaxed(df[c])
             ratio = parsed.notna().mean()
             if ratio > best_ratio:
                 best_ratio = ratio
                 best = c
         ts_col = best
     if ts_col:
-        df["timestamp"] = pd.to_datetime(df[ts_col], errors="coerce")
+        df["timestamp"] = _to_datetime_relaxed(df[ts_col])
 
-    # Amount inference
     if "debit" in df.columns and "credit" in df.columns:
         df["amount"] = _coerce_numeric(df["credit"]).fillna(0) - _coerce_numeric(df["debit"]).fillna(0)
     else:
@@ -122,7 +136,6 @@ def _infer_columns(df: pd.DataFrame) -> pd.DataFrame:
         else:
             numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
             if not numeric_cols:
-                numeric_cols = []
                 for c in df.columns:
                     coerced = _coerce_numeric(df[c])
                     if coerced.notna().mean() > 0.6:
@@ -133,7 +146,6 @@ def _infer_columns(df: pd.DataFrame) -> pd.DataFrame:
                 best = max(variances, key=lambda k: variances[k] if pd.notna(variances[k]) else -1)
                 df["amount"] = _coerce_numeric(df[best])
 
-    # Category inference
     if "category" not in df.columns:
         text_cols = df.select_dtypes(include=["object"]).columns.tolist()
         if text_cols:
@@ -141,7 +153,6 @@ def _infer_columns(df: pd.DataFrame) -> pd.DataFrame:
             best = min(counts, key=lambda k: counts[k] if counts[k] > 0 else 1e9)
             df["category"] = df[best].fillna("General")
 
-    # Merchant inference
     merch_col = _pick_column(df, COLUMN_ALIASES["merchant"])
     if merch_col:
         df["merchant"] = df[merch_col]
@@ -152,21 +163,18 @@ def _infer_columns(df: pd.DataFrame) -> pd.DataFrame:
             best = max(counts, key=lambda k: counts[k])
             df["merchant"] = df[best].fillna("Unknown")
 
-    # Country inference
     country_col = _pick_column(df, COLUMN_ALIASES["country"])
     if country_col:
         df["country"] = df[country_col]
     elif "country" not in df.columns:
         df["country"] = "Unknown"
 
-    # User ID inference
     user_col = _pick_column(df, COLUMN_ALIASES["user_id"])
     if user_col:
         df["user_id"] = df[user_col]
     elif "user_id" not in df.columns:
         df["user_id"] = "user-1"
 
-    # Fallbacks to avoid empty frames
     if "timestamp" not in df.columns:
         df["timestamp"] = pd.to_datetime(pd.Timestamp.today()) + pd.to_timedelta(np.arange(len(df)), unit="D")
     else:
@@ -193,21 +201,6 @@ def _infer_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_transactions_excel(path: str | Path) -> pd.DataFrame:
-    """
-    Here I load an Excel file containing transaction records and enforce
-    a simple schema contract. If anything critical is missing, I raise
-    a clear ValueError so that the UI can surface a friendly message.
-
-    Parameters
-    ----------
-    path:
-        Path to the Excel file on disk.
-
-    Returns
-    -------
-    pandas.DataFrame
-        DataFrame that contains at least the REQUIRED_COLUMNS.
-    """
     file_path = Path(path)
     if not file_path.exists():
         raise FileNotFoundError(f"I expected the file '{file_path}' to exist.")
@@ -215,39 +208,28 @@ def load_transactions_excel(path: str | Path) -> pd.DataFrame:
     try:
         if file_path.suffix.lower() in (".xlsx", ".xls"):
             frames: List[pd.DataFrame] = []
-            try:
-                xls = pd.ExcelFile(file_path)
-                for sheet in xls.sheet_names:
-                    for header in range(0, 6):
-                        try:
-                            frames.append(xls.parse(sheet, header=header))
-                        except Exception:
-                            continue
-            except Exception:
-                frames = []
-            if frames:
-                df_raw = _best_frame(frames)
-            else:
-                df_raw = pd.read_excel(file_path)
+            xls = pd.ExcelFile(file_path)
+            for sheet in xls.sheet_names:
+                for header in range(0, 6):
+                    try:
+                        frames.append(xls.parse(sheet, header=header))
+                    except Exception:
+                        continue
+            df_raw = _best_frame(frames) if frames else pd.read_excel(file_path)
         else:
             frames = []
-            encodings = ["utf-8-sig", "utf-8", "latin1"]
-            for enc in encodings:
+            for enc in ("utf-8-sig", "utf-8", "latin1"):
                 for header in range(0, 4):
                     try:
                         frames.append(pd.read_csv(file_path, encoding=enc, header=header))
                     except Exception:
                         continue
-            if frames:
-                df_raw = _best_frame(frames)
-            else:
-                df_raw = pd.read_csv(file_path, sep=None, engine="python")
-    except Exception as exc:  # pragma: no cover - defensive
+            df_raw = _best_frame(frames) if frames else pd.read_csv(file_path, sep=None, engine="python")
+    except Exception as exc:
         raise ValueError(f"I could not read the input file: {exc}") from exc
 
     df_raw = df_raw.dropna(axis=0, how="all").dropna(axis=1, how="all")
-    df_raw = _infer_columns(df_raw)
-    return df_raw
+    return _infer_columns(df_raw)
 
 
 __all__ = ["load_transactions_excel", "REQUIRED_COLUMNS"]

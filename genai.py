@@ -82,7 +82,7 @@ def _format_context(
     else:
         for tx in fraud_cases[:50]:
             user = tx.get("user_id")
-            amt = tx.get("amount")
+            amt = float(tx.get("amount", 0.0) or 0.0)
             cat = tx.get("category")
             country = tx.get("country")
             ts = tx.get("timestamp")

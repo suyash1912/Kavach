@@ -325,8 +325,14 @@ def build_excel_report(df: pd.DataFrame, report: CAReport, verified_only: bool) 
         raise ValueError("Cannot download verified report while anomalies exist.")
 
     output = BytesIO()
+    meta = {
+        "generated_at_utc": pd.Timestamp.utcnow().isoformat(),
+        "verified": bool(report.verified),
+        "anomaly_count": int(len(report.anomalies)),
+    }
 
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        pd.DataFrame([meta]).to_excel(writer, index=False, sheet_name="ReportMeta")
         df.to_excel(writer, index=False, sheet_name="Transactions")
         pd.DataFrame([report.summary]).to_excel(writer, index=False, sheet_name="Summary")
         pd.DataFrame(report.anomalies).to_excel(writer, index=False, sheet_name="Anomalies")

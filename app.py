@@ -15,7 +15,9 @@ The whole system runs locally via:
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from pathlib import Path
 import time
 import uuid
@@ -27,9 +29,9 @@ import pandas as pd
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.responses import RedirectResponse
+from pydantic import BaseModel, Field
 import uvicorn
 
 from features import engineer_transaction_features
@@ -41,6 +43,7 @@ from preprocessing import transform_with_artifacts
 
 
 app = FastAPI(title="KAVACH", version="0.1.0")
+logger = logging.getLogger("kavach.api")
 
 # I allow the frontend JS to talk to the backend without CORS issues.
 app.add_middleware(
@@ -55,6 +58,15 @@ BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BASE_DIR / "frontend"
 DATA_DIR = BASE_DIR / "data"
 MODEL_PATH = BASE_DIR / "model.pkl"
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+ALLOWED_EXTENSIONS = {".xlsx", ".xls", ".csv"}
+ALLOWED_CONTENT_TYPES = {
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "text/csv",
+    "application/csv",
+    "application/octet-stream",
+}
 
 
 class AppState:
@@ -74,6 +86,7 @@ class AppState:
         self.user_profile: Dict[str, Any] | None = None
         self.sample_rows: list[Dict[str, Any]] | None = None
         self.last_upload_path: Path | None = None
+        self.dashboard_payload: Dict[str, Any] | None = None
         self.ca_df: pd.DataFrame | None = None
         self.ca_report: Dict[str, Any] | None = None
         self.ca_last_upload_path: Path | None = None
@@ -93,7 +106,12 @@ SESSION_LAST_ACCESS: dict[str, float] = {}
 MODEL_BUNDLE: Dict[str, Any] | None = None
 
 
+class AskAIRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=5000)
+
+
 def _create_session_state() -> tuple[str, AppState]:
+    _cleanup_expired_sessions()
     session_id = uuid.uuid4().hex
     s = AppState()
     SESSION_STORE[session_id] = s
@@ -101,7 +119,45 @@ def _create_session_state() -> tuple[str, AppState]:
     return session_id, s
 
 
+def _cleanup_expired_sessions() -> None:
+    now = time.time()
+    expired = [
+        sid
+        for sid, last_access in SESSION_LAST_ACCESS.items()
+        if (now - last_access) > SESSION_TTL_SECONDS
+    ]
+    for sid in expired:
+        SESSION_LAST_ACCESS.pop(sid, None)
+        SESSION_STORE.pop(sid, None)
+
+
+def _validate_upload(file: UploadFile, contents: bytes) -> str:
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing filename.")
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file type. Allowed: .xlsx, .xls, .csv.",
+        )
+    if len(contents) == 0:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Limit is {MAX_UPLOAD_BYTES // (1024 * 1024)}MB.",
+        )
+    content_type = (file.content_type or "").lower().strip()
+    if content_type and content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported content type for uploaded statement.",
+        )
+    return suffix
+
+
 def _get_state_for_request(request: Request) -> AppState:
+    _cleanup_expired_sessions()
     session_id = request.cookies.get(SESSION_COOKIE_NAME)
     if not session_id:
         # Backwards compatible fallback for older frontends.
@@ -164,6 +220,35 @@ app.mount(
 )
 
 
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    start = time.perf_counter()
+    request_id = uuid.uuid4().hex[:12]
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = (time.perf_counter() - start) * 1000
+        logger.exception(
+            "request_failed request_id=%s method=%s path=%s duration_ms=%.2f",
+            request_id,
+            request.method,
+            request.url.path,
+            duration_ms,
+        )
+        raise
+    duration_ms = (time.perf_counter() - start) * 1000
+    response.headers["X-Request-Id"] = request_id
+    logger.info(
+        "request_complete request_id=%s method=%s path=%s status=%s duration_ms=%.2f",
+        request_id,
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+    )
+    return response
+
+
 def _load_model_bundle() -> Dict[str, Any] | None:
     """
     At startup, I attempt to load an existing trained model. If the
@@ -191,7 +276,8 @@ def _score_transactions_with_model(
     df = df_with_features.copy()
 
     if model_bundle is None:
-        # I fall back to a very simple heuristic score for demo purposes.
+        # Fall back to a deterministic rule score when no model is available.
+        df["model_raw_score"] = 0.0
         df["fraud_score"] = df["rule_based_fraud_flag"].astype(float)
         df["model_fraud_flag"] = df["rule_based_fraud_flag"].astype(bool)
         return df
@@ -199,19 +285,90 @@ def _score_transactions_with_model(
     artifacts = model_bundle["preprocessing"]
     engineered_cols = model_bundle["engineered_feature_names"]
     clf = model_bundle["classifier"]
+    threshold = float(model_bundle.get("classification_threshold", 0.6))
 
     # I transform with the fitted preprocessing artifacts from training.
     X_num = transform_with_artifacts(df, artifacts)
     engineered_subset = df.reindex(columns=engineered_cols).fillna(0.0).astype(float)
     X_full = np.hstack([X_num.values, engineered_subset.values])
 
-    scores = clf.predict_proba(X_full)[:, 1]
-    df["fraud_score"] = scores
-
-    # I map continuous scores to three buckets just for visualization.
-    df["model_fraud_flag"] = scores > 0.6
+    scores = clf.predict_proba(X_full)
+    model_scores = scores[:, 1] if scores.shape[1] > 1 else np.zeros(len(df), dtype=float)
+    velocity_component = (
+        df["velocity_flag"].astype(float)
+        if "velocity_flag" in df.columns
+        else pd.Series(0.0, index=df.index)
+    )
+    country_component = (
+        df["country_changed"].astype(float)
+        if "country_changed" in df.columns
+        else pd.Series(0.0, index=df.index)
+    )
+    rule_scores = (
+        df["rule_based_fraud_flag"].astype(float) * 0.55
+        + velocity_component * 0.15
+        + country_component * 0.15
+    ).clip(0.0, 1.0)
+    blended_scores = (0.75 * model_scores + 0.25 * rule_scores).clip(0.0, 1.0)
+    df["model_raw_score"] = model_scores
+    df["fraud_score"] = blended_scores
+    df["model_fraud_flag"] = model_scores >= threshold
 
     return df
+
+
+def _build_dashboard_payload(s: AppState) -> Dict[str, Any]:
+    if s.df_with_features is None or s.insights is None:
+        raise ValueError("No dashboard state available.")
+
+    df = s.df_with_features
+    cat_group = df.groupby("category")["amount"].sum().reset_index()
+    category_chart = {
+        "labels": cat_group["category"].astype(str).tolist(),
+        "values": cat_group["amount"].astype(float).tolist(),
+    }
+    monthly = s.insights.get("monthly_trends", [])
+
+    tx_columns = [
+        "id",
+        "user_id",
+        "timestamp",
+        "amount",
+        "category",
+        "merchant",
+        "country",
+        "fraud_score",
+        "rule_based_fraud_flag",
+        "model_fraud_flag",
+        "velocity_flag",
+    ]
+    tx_records: list[Dict[str, Any]] = []
+    df_tx = df.copy()
+    if "id" not in df_tx.columns:
+        df_tx["id"] = np.arange(len(df_tx))
+    for _, row in df_tx[tx_columns].head(2000).iterrows():
+        rec = {k: row[k] for k in tx_columns if k in row}
+        if isinstance(rec.get("timestamp"), pd.Timestamp):
+            rec["timestamp"] = rec["timestamp"].isoformat()
+        rec["amount"] = float(rec["amount"])
+        if rec.get("fraud_score") is not None:
+            rec["fraud_score"] = float(rec["fraud_score"])
+        rec["rule_based_fraud_flag"] = bool(rec["rule_based_fraud_flag"])
+        rec["model_fraud_flag"] = bool(rec["model_fraud_flag"])
+        if "velocity_flag" in rec:
+            rec["velocity_flag"] = bool(rec["velocity_flag"])
+        tx_records.append(rec)
+
+    return {
+        "insights": s.insights,
+        "category_chart": category_chart,
+        "monthly_trends": monthly,
+        "transactions": tx_records,
+        "fraud_table": s.fraud_table or [],
+        "cluster_insights": s.cluster_insights or [],
+        "user_profile": s.user_profile or {},
+        "sample_rows": s.sample_rows or [],
+    }
 
 
 @app.on_event("startup")
@@ -223,6 +380,10 @@ def on_startup() -> None:
     # Here I also load a local .env file so that deployments can keep
     # secrets like GROQ_API_KEY outside of the codebase.
     load_dotenv()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
 
     DATA_DIR.mkdir(exist_ok=True)
     FRONTEND_DIR.mkdir(exist_ok=True)
@@ -256,17 +417,10 @@ async def upload_transactions(
     I accept an Excel file, run it through the full analytics stack,
     and cache all intermediate results in memory for the dashboard to use.
     """
-    if not file.filename.lower().endswith((".xlsx", ".xls", ".csv")):
-        raise HTTPException(
-            status_code=400,
-            detail="I expect an Excel or CSV file with extension .xlsx, .xls, or .csv.",
-        )
-
     session_id, session_state = _create_session_state()
-
-    suffix = Path(file.filename).suffix.lower()
-    tmp_path = DATA_DIR / f"uploaded_transactions_{session_id}{suffix}"
     contents = await file.read()
+    suffix = _validate_upload(file, contents)
+    tmp_path = DATA_DIR / f"uploaded_transactions_{session_id}{suffix}"
     tmp_path.write_bytes(contents)
 
     try:
@@ -309,6 +463,7 @@ async def upload_transactions(
         sample_rows.append(record)
     session_state.sample_rows = sample_rows
     session_state.last_upload_path = tmp_path
+    session_state.dashboard_payload = _build_dashboard_payload(session_state)
 
     # Backwards-compatible legacy behavior (single global session).
     # This keeps existing clients working even if cookies aren't persisted.
@@ -320,6 +475,7 @@ async def upload_transactions(
     state.user_profile = session_state.user_profile
     state.sample_rows = sample_rows
     state.last_upload_path = tmp_path
+    state.dashboard_payload = session_state.dashboard_payload
 
     response = JSONResponse({"status": "ok"})
     response.set_cookie(
@@ -353,17 +509,19 @@ async def company_accountant_page() -> HTMLResponse:
 
 
 @app.get("/dashboard_data")
-async def dashboard_data(request: Request) -> JSONResponse:
+async def dashboard_data(request: Request, recover: bool = False) -> JSONResponse:
     """
     Here I expose the latest analytics snapshot as JSON so that the
     frontend can render charts and tables with Chart.js.
     """
     s = _get_state_for_request(request)
+    if s.dashboard_payload is not None:
+        return JSONResponse(s.dashboard_payload)
 
     if s.df_with_features is None or s.insights is None:
         # Attempt to rehydrate from the last uploaded file on disk.
         uploaded_path = s.last_upload_path or None
-        if uploaded_path is None:
+        if uploaded_path is None and recover:
             candidates: list[Path] = []
             for ext in (".xlsx", ".xls", ".csv"):
                 candidates.extend(DATA_DIR.glob(f"uploaded_transactions_*{ext}"))
@@ -392,6 +550,7 @@ async def dashboard_data(request: Request) -> JSONResponse:
                 s.insights = insights
                 s.fraud_table = fraud_table
                 s.cluster_insights = cluster_insights
+                s.dashboard_payload = _build_dashboard_payload(s)
                 if s.sample_rows is None:
                     sample_rows = []
                     for _, row in df_raw.head(5).iterrows():
@@ -405,6 +564,7 @@ async def dashboard_data(request: Request) -> JSONResponse:
                                 record[key] = value
                         sample_rows.append(record)
                     s.sample_rows = sample_rows
+                s.dashboard_payload = _build_dashboard_payload(s)
             except Exception:
                 raise HTTPException(
                     status_code=400,
@@ -415,73 +575,16 @@ async def dashboard_data(request: Request) -> JSONResponse:
                 status_code=400,
                 detail="I have not analyzed any transactions yet. Please upload a file.",
             )
-
-    # I prepare spending by category for the pie chart.
-    df = s.df_with_features
-    cat_group = df.groupby("category")["amount"].sum().reset_index()
-    category_chart = {
-        "labels": cat_group["category"].astype(str).tolist(),
-        "values": cat_group["amount"].astype(float).tolist(),
-    }
-
-    # I prepare monthly trend data.
-    monthly = s.insights.get("monthly_trends", [])
-
-    # I also expose a trimmed transaction table for display.
-    tx_columns = [
-        "id",
-        "user_id",
-        "timestamp",
-        "amount",
-        "category",
-        "merchant",
-        "country",
-        "fraud_score",
-        "rule_based_fraud_flag",
-        "model_fraud_flag",
-        "velocity_flag",
-    ]
-    tx_records = []
-    df_tx = df.copy()
-    if "id" not in df_tx.columns:
-        df_tx["id"] = np.arange(len(df_tx))
-    for _, row in df_tx[tx_columns].head(200).iterrows():
-        rec = {k: row[k] for k in tx_columns if k in row}
-        if isinstance(rec.get("timestamp"), pd.Timestamp):
-            rec["timestamp"] = rec["timestamp"].isoformat()
-        rec["amount"] = float(rec["amount"])
-        if rec.get("fraud_score") is not None:
-            rec["fraud_score"] = float(rec["fraud_score"])
-        rec["rule_based_fraud_flag"] = bool(rec["rule_based_fraud_flag"])
-        rec["model_fraud_flag"] = bool(rec["model_fraud_flag"])
-        if "velocity_flag" in rec:
-            rec["velocity_flag"] = bool(rec["velocity_flag"])
-        tx_records.append(rec)
-
-    return JSONResponse(
-        {
-            "insights": s.insights,
-            "category_chart": category_chart,
-            "monthly_trends": monthly,
-            "transactions": tx_records,
-            "fraud_table": s.fraud_table or [],
-            "cluster_insights": s.cluster_insights or [],
-            "user_profile": s.user_profile or {},
-            "sample_rows": s.sample_rows or [],
-        }
-    )
+    s.dashboard_payload = _build_dashboard_payload(s)
+    return JSONResponse(s.dashboard_payload)
 
 
 @app.post("/company_upload")
 async def company_upload(file: UploadFile = File(...)) -> JSONResponse:
-    if not file.filename.lower().endswith((".xlsx", ".xls", ".csv")):
-        raise HTTPException(status_code=400, detail="Please upload an Excel or CSV file.")
-
     session_id, session_state = _create_session_state()
-
-    suffix = Path(file.filename).suffix.lower()
-    tmp_path = DATA_DIR / f"company_upload_{session_id}{suffix}"
     contents = await file.read()
+    suffix = _validate_upload(file, contents)
+    tmp_path = DATA_DIR / f"company_upload_{session_id}{suffix}"
     tmp_path.write_bytes(contents)
 
     try:
@@ -530,7 +633,15 @@ async def company_report(request: Request) -> JSONResponse:
         raise HTTPException(status_code=400, detail="Please upload a company file first.")
     payload = dict(s.ca_report)
     payload["build"] = "verify-v2"
+    payload["generated_at"] = pd.Timestamp.utcnow().isoformat()
     return JSONResponse(payload)
+
+
+@app.get("/api/v1/company_report")
+async def company_report_v1(request: Request) -> JSONResponse:
+    payload = await company_report(request)
+    data = json.loads(payload.body.decode("utf-8"))
+    return JSONResponse({"status": "ok", "data": data})
 
 
 @app.get("/company_report_excel")
@@ -586,12 +697,12 @@ async def company_report_pdf(request: Request) -> Response:
 
 
 @app.post("/ask_ai")
-async def ask_ai(request: Request, payload: Dict[str, Any]) -> JSONResponse:
+async def ask_ai(request: Request, payload: AskAIRequest) -> JSONResponse:
     """
     This endpoint takes a user question from the dashboard and routes
     it through the KAVACH‑powered financial analyst defined in `genai.py`.
     """
-    question = payload.get("question", "").strip()
+    question = payload.question.strip()
     if not question:
         raise HTTPException(
             status_code=400, detail="I need a non‑empty question to answer."
@@ -611,6 +722,89 @@ async def ask_ai(request: Request, payload: Dict[str, Any]) -> JSONResponse:
         fraud_cases=s.fraud_table,
     )
     return JSONResponse({"answer": answer})
+
+
+@app.get("/model_info")
+async def model_info() -> JSONResponse:
+    if MODEL_BUNDLE is None:
+        return JSONResponse({"available": False, "message": "No trained model bundle loaded."})
+
+    feature_names = MODEL_BUNDLE.get("feature_names", [])
+    importances = MODEL_BUNDLE.get("feature_importances", [])
+    pairs = []
+    for idx, name in enumerate(feature_names):
+        if idx >= len(importances):
+            break
+        pairs.append({"feature": str(name), "importance": float(importances[idx])})
+    pairs.sort(key=lambda x: x["importance"], reverse=True)
+
+    return JSONResponse(
+        {
+            "available": True,
+            "threshold": float(MODEL_BUNDLE.get("classification_threshold", 0.6)),
+            "top_features": pairs[:20],
+            "metrics": MODEL_BUNDLE.get("metrics", {}),
+        }
+    )
+
+
+@app.get("/api/v1/dashboard_data")
+async def dashboard_data_v1(request: Request) -> JSONResponse:
+    payload = await dashboard_data(request)
+    data = json.loads(payload.body.decode("utf-8"))
+    return JSONResponse({"status": "ok", "data": data})
+
+
+@app.get("/explain_transaction/{tx_id}")
+async def explain_transaction(tx_id: int, request: Request) -> JSONResponse:
+    s = _get_state_for_request(request)
+    if s.df_with_features is None:
+        raise HTTPException(status_code=400, detail="Please upload and analyze a file first.")
+
+    df = s.df_with_features.copy()
+    if "id" not in df.columns:
+        df["id"] = np.arange(len(df))
+    row = df[df["id"] == tx_id]
+    if row.empty:
+        raise HTTPException(status_code=404, detail=f"Transaction '{tx_id}' not found.")
+
+    tx = row.iloc[0]
+    model_info_payload = await model_info()
+    model_info_data = json.loads(model_info_payload.body.decode("utf-8"))
+    top_features = model_info_data.get("top_features", [])[:8] if model_info_data.get("available") else []
+
+    return JSONResponse(
+        {
+            "transaction_id": int(tx_id),
+            "user_id": str(tx.get("user_id", "")),
+            "amount": float(tx.get("amount", 0.0)),
+            "country": str(tx.get("country", "")),
+            "category": str(tx.get("category", "")),
+            "fraud_score": float(tx.get("fraud_score", 0.0)),
+            "rule_based_fraud_flag": bool(tx.get("rule_based_fraud_flag", False)),
+            "model_fraud_flag": bool(tx.get("model_fraud_flag", False)),
+            "top_model_drivers": top_features,
+        }
+    )
+
+
+@app.get("/stream/dashboard")
+async def stream_dashboard(request: Request) -> StreamingResponse:
+    async def event_gen():
+        while True:
+            if await request.is_disconnected():
+                break
+            s = _get_state_for_request(request)
+            payload = {
+                "ts": time.time(),
+                "has_data": bool(s.df_with_features is not None),
+                "total_transactions": int(len(s.df_with_features)) if s.df_with_features is not None else 0,
+                "flagged_transactions": int(len(s.fraud_table or [])),
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
+            await asyncio.sleep(2.0)
+
+    return StreamingResponse(event_gen(), media_type="text/event-stream")
 
 
 if __name__ == "__main__":

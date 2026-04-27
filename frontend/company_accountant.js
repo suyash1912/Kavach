@@ -33,6 +33,15 @@
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function showFile(file) {
     if (!file) return;
     fileName.textContent = file.name;
@@ -99,7 +108,7 @@
 
     const tbody = $('#ca-anomalies tbody');
     tbody.innerHTML = report.anomalies.length
-      ? report.anomalies.map(a => `<tr><td>${a.row}</td><td>${a.field}</td><td>${a.issue}</td><td>${a.suggestion}</td></tr>`).join('')
+      ? report.anomalies.map(a => `<tr><td>${escapeHtml(a.row)}</td><td>${escapeHtml(a.field)}</td><td>${escapeHtml(a.issue)}</td><td>${escapeHtml(a.suggestion)}</td></tr>`).join('')
       : '<tr><td colspan="4">No anomalies detected.</td></tr>';
 
     downloadVerified.disabled = !report.verified;
