@@ -2368,6 +2368,80 @@ kbd {
   to { transform: rotate(360deg); }
 }
 
+/* KAVACH Logo Loader */
+.kavach-logo-loader {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  margin: 0 auto;
+}
+
+.logo-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  animation: ring-spin 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.logo-ring-1 {
+  border-top-color: var(--accent-teal);
+  animation-delay: 0s;
+}
+
+.logo-ring-2 {
+  inset: 10px;
+  border-top-color: var(--accent-cyan);
+  animation-delay: 0.2s;
+  animation-direction: reverse;
+}
+
+.logo-ring-3 {
+  inset: 20px;
+  border-top-color: var(--accent-purple);
+  animation-delay: 0.4s;
+}
+
+@keyframes ring-spin {
+  0% {
+    transform: rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: rotate(360deg);
+    opacity: 1;
+  }
+}
+
+.logo-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 2.5rem;
+  background: linear-gradient(135deg, var(--accent-teal) 0%, var(--accent-cyan) 50%, var(--accent-purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: logo-pulse 2s ease-in-out infinite;
+}
+
+@keyframes logo-pulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    filter: drop-shadow(0 0 10px rgba(45, 212, 191, 0.5));
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+    filter: drop-shadow(0 0 20px rgba(56, 189, 248, 0.8));
+  }
+}
+
 .loading-card h3 {
   margin-bottom: var(--space-2);
 }

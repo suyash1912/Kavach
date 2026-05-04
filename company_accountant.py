@@ -125,7 +125,7 @@ def _category_totals(df: pd.DataFrame):
 
 
 # ----------------------------
-# 🚨 FIXED ANOMALY DETECTION
+# 🚨 ANOMALY DETECTION (REDUCED FALSE POSITIVES)
 # ----------------------------
 def _detect_anomalies(df: pd.DataFrame) -> List[Dict[str, str]]:
     anomalies = []
@@ -141,8 +141,6 @@ def _detect_anomalies(df: pd.DataFrame) -> List[Dict[str, str]]:
             anomalies.append({"row": str(row.row_number), "field": "date", "issue": "Invalid date"})
         if pd.isna(row["amount"]):
             anomalies.append({"row": str(row.row_number), "field": "amount", "issue": "Missing amount"})
-        if not row["category"]:
-            anomalies.append({"row": str(row.row_number), "field": "category", "issue": "Missing category"})
 
     if len(df) < 50:
         return anomalies
@@ -177,10 +175,10 @@ def _detect_anomalies(df: pd.DataFrame) -> List[Dict[str, str]]:
 
             amounts = subset["amount"].values
 
-            # IQR
+            # IQR with stricter multiplier (3.0 instead of 1.5)
             q1, q3 = np.percentile(amounts, [25, 75])
             iqr = q3 - q1
-            lb, ub = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+            lb, ub = q1 - 3.0 * iqr, q3 + 3.0 * iqr
 
             stat_flags = (amounts < lb) | (amounts > ub)
 
@@ -189,9 +187,9 @@ def _detect_anomalies(df: pd.DataFrame) -> List[Dict[str, str]]:
             if not np.any(stat_flags):
                 continue
 
-            # ML
+            # ML with lower contamination to reduce false positives
             X = StandardScaler().fit_transform(amounts.reshape(-1, 1))
-            model = IsolationForest(contamination="auto", random_state=42, n_jobs=-1)
+            model = IsolationForest(contamination=0.05, random_state=42, n_jobs=-1)
             ml_flags = model.fit_predict(X) == -1
 
             final_flags = stat_flags & ml_flags
@@ -341,86 +339,203 @@ def build_excel_report(df: pd.DataFrame, report: CAReport, verified_only: bool) 
 
 
 # ----------------------------
-# EXPORT: PREMIUM PDF
+# EXPORT: ULTRA-PREMIUM PDF
 # ----------------------------
 def build_pdf_report(report: CAReport, verified_only: bool = True) -> bytes:
     from fpdf import FPDF
+    from datetime import datetime
 
     if verified_only and not report.verified:
         raise ValueError("Cannot generate verified PDF while anomalies exist.")
 
-    pdf = FPDF()
+    # Custom PDF class with header and footer
+    class KavachPDF(FPDF):
+        def header(self):
+            # KAVACH Logo Text
+            self.set_font("helvetica", "B", 24)
+            self.set_text_color(45, 212, 191)  # Teal
+            self.cell(0, 15, "KAVACH", ln=True, align="C")
+            
+            # Subtitle
+            self.set_font("helvetica", "I", 10)
+            self.set_text_color(100, 116, 139)
+            self.cell(0, 8, "Financial Integrity Verification Report", ln=True, align="C")
+            
+            # Line separator
+            self.ln(5)
+            self.set_draw_color(45, 212, 191)
+            self.set_line_width(1)
+            self.line(20, self.get_y(), 190, self.get_y())
+            self.ln(10)
+            
+        def footer(self):
+            # Position at 1.5 cm from bottom
+            self.set_y(-25)
+            self.set_font("helvetica", "I", 9)
+            self.set_text_color(148, 163, 184)
+            
+            # Left footer: Date
+            self.cell(95, 8, f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}", 0, 0, "L")
+            
+            # Right footer: Page number
+            self.cell(95, 8, f"Page {self.page_no()}", 0, 0, "R")
+            
+            # Watermark
+            self.set_y(120)
+            self.set_font("helvetica", "B", 60)
+            self.set_text_color(220, 220, 220)
+            with self.local_context(text_mode="FILL"):
+                self.rotate(45, x=105, y=148.5)
+                self.cell(0, 0, "KAVACH VERIFIED", 0, 0, "C")
+                self.rotate(0)
+
+    pdf = KavachPDF()
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.add_page()
 
-    # Header
-    # Use fpdf core fonts (more portable than Arial across fpdf/fpdf2 installs).
-    pdf.set_font("helvetica", "B", 18)
-    pdf.cell(0, 10, "KAVACH", ln=True, align="C")
-
-    pdf.set_font("helvetica", size=10)
-    pdf.set_text_color(100, 100, 100)
-    pdf.cell(0, 6, "Financial Integrity Verification Report", ln=True, align="C")
-
-    pdf.ln(10)
-
     is_verified = bool(report.verified)
+
     # Verified/Review Badge
     if is_verified:
-        pdf.set_text_color(34, 197, 94)
+        pdf.set_fill_color(34, 197, 94)
+        pdf.set_text_color(255, 255, 255)
         badge_title = "KAVACH VERIFIED"
         subtitle = "This dataset passed all anomaly detection checks"
     else:
-        pdf.set_text_color(244, 63, 94)
+        pdf.set_fill_color(244, 63, 94)
+        pdf.set_text_color(255, 255, 255)
         badge_title = "KAVACH REVIEW REQUIRED"
         subtitle = f"{len(report.anomalies)} anomalies detected. Review recommended"
 
-    pdf.set_font("helvetica", "B", 22)
-    pdf.cell(0, 15, badge_title, ln=True, align="C")
+    # Badge box
+    pdf.set_font("helvetica", "B", 20)
+    pdf.cell(0, 18, badge_title, ln=True, align="C", fill=True)
 
+    pdf.ln(5)
+    pdf.set_text_color(51, 65, 85)
     pdf.set_font("helvetica", size=12)
     pdf.cell(0, 8, subtitle, ln=True, align="C")
 
-    pdf.set_text_color(0, 0, 0)
     pdf.ln(15)
 
-    # Summary
+    # Financial Summary
+    pdf.set_font("helvetica", "B", 16)
+    pdf.set_text_color(15, 23, 42)
+    pdf.cell(0, 12, "Financial Summary", ln=True)
+    
+    # Summary cards
+    pdf.set_fill_color(240, 249, 255)
+    pdf.set_draw_color(45, 212, 191)
+    pdf.set_line_width(0.5)
+    
+    # Revenue
+    pdf.set_font("helvetica", "B", 11)
+    pdf.set_text_color(51, 65, 85)
+    pdf.cell(60, 10, "Total Revenue", border=1, ln=0, align="L", fill=True)
     pdf.set_font("helvetica", "B", 14)
-    pdf.cell(0, 10, "Financial Summary", ln=True)
+    pdf.set_text_color(34, 197, 94)
+    pdf.cell(0, 10, f"INR {report.summary['revenue']:,.2f}", border=1, ln=1, align="R", fill=True)
+    
+    # Expenses
+    pdf.set_font("helvetica", "B", 11)
+    pdf.set_text_color(51, 65, 85)
+    pdf.cell(60, 10, "Total Expenses", border=1, ln=0, align="L", fill=True)
+    pdf.set_font("helvetica", "B", 14)
+    pdf.set_text_color(244, 63, 94)
+    pdf.cell(0, 10, f"INR {report.summary['expenses']:,.2f}", border=1, ln=1, align="R", fill=True)
+    
+    # Net Profit
+    pdf.set_font("helvetica", "B", 11)
+    pdf.set_text_color(51, 65, 85)
+    pdf.cell(60, 10, "Net Profit", border=1, ln=0, align="L", fill=True)
+    profit_color = (34, 197, 94) if report.summary['profit'] >= 0 else (244, 63, 94)
+    pdf.set_text_color(*profit_color)
+    pdf.set_font("helvetica", "B", 14)
+    pdf.cell(0, 10, f"INR {report.summary['profit']:,.2f}", border=1, ln=1, align="R", fill=True)
 
-    pdf.set_font("helvetica", size=12)
-    # Keep PDF text ASCII-only to avoid encoding issues across fonts.
-    pdf.cell(0, 8, f"Revenue   : INR {report.summary['revenue']:,.2f}", ln=True)
-    pdf.cell(0, 8, f"Expenses  : INR {report.summary['expenses']:,.2f}", ln=True)
-    pdf.cell(0, 8, f"Net Profit: INR {report.summary['profit']:,.2f}", ln=True)
+    pdf.ln(12)
 
-    pdf.ln(15)
-
-    # Optional anomalies section
-    if not is_verified and report.anomalies:
-        pdf.set_font("helvetica", "B", 13)
-        pdf.cell(0, 10, "Anomalies (Top)", ln=True)
+    # Monthly Trends
+    if report.monthly_trends:
+        pdf.set_font("helvetica", "B", 16)
+        pdf.set_text_color(15, 23, 42)
+        pdf.cell(0, 12, "Monthly Trends", ln=True)
+        
+        pdf.set_font("helvetica", "B", 10)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_fill_color(45, 212, 191)
+        pdf.cell(50, 8, "Month", border=1, ln=0, align="C", fill=True)
+        pdf.cell(70, 8, "Revenue", border=1, ln=0, align="C", fill=True)
+        pdf.cell(70, 8, "Expenses", border=1, ln=1, align="C", fill=True)
+        
         pdf.set_font("helvetica", size=10)
-        pdf.set_text_color(40, 40, 40)
-        for a in report.anomalies[:15]:
+        pdf.set_text_color(51, 65, 85)
+        pdf.set_fill_color(248, 250, 252)
+        fill = False
+        for trend in report.monthly_trends:
+            pdf.cell(50, 7, trend["month"], border=1, ln=0, align="C", fill=fill)
+            pdf.cell(70, 7, f"INR {trend['revenue']:,.2f}", border=1, ln=0, align="R", fill=fill)
+            pdf.cell(70, 7, f"INR {trend['expenses']:,.2f}", border=1, ln=1, align="R", fill=fill)
+            fill = not fill
+
+        pdf.ln(12)
+
+    # Category Totals
+    if report.category_totals:
+        pdf.set_font("helvetica", "B", 16)
+        pdf.set_text_color(15, 23, 42)
+        pdf.cell(0, 12, "Category Breakdown", ln=True)
+        
+        pdf.set_font("helvetica", "B", 10)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_fill_color(56, 189, 248)
+        pdf.cell(95, 8, "Category", border=1, ln=0, align="C", fill=True)
+        pdf.cell(95, 8, "Total Amount", border=1, ln=1, align="C", fill=True)
+        
+        pdf.set_font("helvetica", size=10)
+        pdf.set_text_color(51, 65, 85)
+        pdf.set_fill_color(248, 250, 252)
+        fill = False
+        for cat in report.category_totals:
+            pdf.cell(95, 7, cat["category"][:40], border=1, ln=0, align="L", fill=fill)
+            pdf.cell(95, 7, f"INR {cat['total']:,.2f}", border=1, ln=1, align="R", fill=fill)
+            fill = not fill
+
+        pdf.ln(12)
+
+    # Anomalies Section
+    if report.anomalies:
+        pdf.add_page()
+        
+        pdf.set_font("helvetica", "B", 16)
+        pdf.set_text_color(15, 23, 42)
+        pdf.cell(0, 12, "Detected Anomalies", ln=True)
+        
+        pdf.set_font("helvetica", "B", 9)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_fill_color(244, 63, 94)
+        pdf.cell(20, 8, "Row", border=1, ln=0, align="C", fill=True)
+        pdf.cell(35, 8, "Field", border=1, ln=0, align="C", fill=True)
+        pdf.cell(80, 8, "Issue", border=1, ln=0, align="C", fill=True)
+        pdf.cell(55, 8, "Suggestion", border=1, ln=1, align="C", fill=True)
+        
+        pdf.set_font("helvetica", size=9)
+        pdf.set_text_color(51, 65, 85)
+        pdf.set_fill_color(248, 250, 252)
+        fill = False
+        for a in report.anomalies[:50]:
             row = a.get("row", "N/A")
             field = a.get("field", "N/A")
-            issue = a.get("issue", "Issue")
-            suggestion = a.get("suggestion", "")
-            text = f"Row {row} | {field}: {issue}" + (f" | Suggestion: {suggestion}" if suggestion else "")
-            pdf.multi_cell(0, 5, text)
-
-        pdf.ln(3)
-
-    # Footer
-    pdf.set_y(-40)
-    pdf.set_font("helvetica", "I", 10)
-    pdf.set_text_color(120, 120, 120)
-    pdf.cell(0, 6, "Verified by Kavach Financial Intelligence System", ln=True, align="C")
-    pdf.cell(0, 6, "Automated Compliance Certification", ln=True, align="C")
+            issue = a.get("issue", "Issue")[:35]
+            suggestion = a.get("suggestion", "N/A")[:25]
+            
+            pdf.cell(20, 7, str(row), border=1, ln=0, align="C", fill=fill)
+            pdf.cell(35, 7, field, border=1, ln=0, align="C", fill=fill)
+            pdf.cell(80, 7, issue, border=1, ln=0, align="L", fill=fill)
+            pdf.cell(55, 7, suggestion, border=1, ln=1, align="L", fill=fill)
+            fill = not fill
 
     output = pdf.output(dest="S")
-    # fpdf2 may return `bytearray` for in-memory output; handle both types.
     if isinstance(output, (bytes, bytearray)):
         return bytes(output)
     return str(output).encode("latin1")

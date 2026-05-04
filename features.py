@@ -84,7 +84,7 @@ def engineer_transaction_features(df_raw: pd.DataFrame) -> pd.DataFrame:
     ) / (df["rolling_std_amount"].fillna(0.0) + eps)
 
     # I flag transactions with large absolute z‑scores as "statistically unusual".
-    df["is_amount_anomaly"] = df["zscore_amount"].abs() > 3.0
+    df["is_amount_anomaly"] = df["zscore_amount"].abs() > 2.5
 
     # I track country changes within each user's sequence of transactions.
     df["prev_country"] = df.groupby("user_id")["country"].shift(1)
@@ -94,9 +94,8 @@ def engineer_transaction_features(df_raw: pd.DataFrame) -> pd.DataFrame:
 
     # For convenience, I also create a composite "rule‑based fraud" flag
     # that I can optionally use as a weak label in the training script.
-    df["rule_based_fraud_flag"] = (
-        df["is_amount_anomaly"].fillna(False) | df["country_changed"].fillna(False)
-    )
+    # Removed country_changed to reduce false positives (country changes are often normal)
+    df["rule_based_fraud_flag"] = df["is_amount_anomaly"].fillna(False)
 
     # If the dataset already includes a fraud/risk label, I fold it in.
     label_candidates = [

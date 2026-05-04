@@ -2531,6 +2531,7 @@ const Dashboard = {
     // Export buttons
     DOM.$('#export-analysis')?.addEventListener('click', () => this.exportReport());
     DOM.$('#export-risk')?.addEventListener('click', () => this.exportFlaggedPdf());
+    DOM.$('#export-flagged-pdf')?.addEventListener('click', () => this.exportFlaggedReportPdf());
     DOM.$('#export-all')?.addEventListener('click', () => this.exportTable('transactions'));
     DOM.$('#export-pdf')?.addEventListener('click', () => this.exportReport());
     DOM.$('#export-json')?.addEventListener('click', () => this.exportJSON());
@@ -2944,6 +2945,35 @@ const Dashboard = {
 
     doc.save(`kavach-flagged-transactions-${new Date().toISOString().split('T')[0]}.pdf`);
     Toast.show('Flagged transactions PDF downloaded', 'success');
+  },
+
+  async exportFlaggedReportPdf() {
+    const rows = this.tables.fraud?.filteredData || [];
+    if (!rows.length) {
+      Toast.show('No flagged transactions to export', 'error');
+      return;
+    }
+
+    try {
+      const response = await fetch('/flagged_report_pdf');
+      if (!response.ok) {
+        throw new Error('Failed to generate PDF');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `kavach-flagged-transactions-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      Toast.show('Flagged transactions PDF downloaded', 'success');
+    } catch (error) {
+      Toast.show(error.message || 'Failed to download PDF', 'error');
+    }
   },
   
   convertToCSV(data) {

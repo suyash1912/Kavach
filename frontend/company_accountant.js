@@ -115,21 +115,43 @@
     downloadVerified.disabled = !report.verified;
   }
 
+  function showLoadingOverlay() {
+    const overlay = $('#loading-overlay');
+    if (overlay) {
+      overlay.classList.remove('hidden');
+      overlay.setAttribute('aria-hidden', 'false');
+    }
+  }
+
+  function hideLoadingOverlay() {
+    const overlay = $('#loading-overlay');
+    if (overlay) {
+      overlay.classList.add('hidden');
+      overlay.setAttribute('aria-hidden', 'true');
+    }
+  }
+
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!fileInput.files.length) return;
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
 
+    showLoadingOverlay();
     statusEl.textContent = 'Uploading and verifying...';
-    const res = await fetch('/company_upload', { method: 'POST', body: formData });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
-      statusEl.textContent = err.detail || 'Upload failed';
-      return;
+    
+    try {
+      const res = await fetch('/company_upload', { method: 'POST', body: formData });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
+        statusEl.textContent = err.detail || 'Upload failed';
+        return;
+      }
+      statusEl.textContent = 'Verification complete.';
+      await renderReport();
+    } finally {
+      hideLoadingOverlay();
     }
-    statusEl.textContent = 'Verification complete.';
-    await renderReport();
   });
 
   downloadIssues?.addEventListener('click', () => {

@@ -337,6 +337,16 @@
                 <input type="range" id="risk-global-threshold" min="0.1" max="0.95" step="0.05" value="0.6" />
                 <span id="risk-threshold-value">0.60</span>
               </div>
+              <button class="ghost-btn btn-sm" id="export-flagged-pdf">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+                Download PDF
+              </button>
               <button class="icon-btn" id="export-risk" aria-label="Export flagged transactions">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -761,9 +771,12 @@
   <div id="loading-overlay" class="loading-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="loading-title" aria-hidden="true">
     <div class="loading-card">
       <div class="loading-visual">
-        <div class="spinner-ring"></div>
-        <div class="spinner-ring"></div>
-        <div class="spinner-ring"></div>
+        <div class="kavach-logo-loader">
+          <div class="logo-ring logo-ring-1"></div>
+          <div class="logo-ring logo-ring-2"></div>
+          <div class="logo-ring logo-ring-3"></div>
+          <div class="logo-core">K</div>
+        </div>
       </div>
       <h3 id="loading-title">Analyzing Dataset</h3>
       <p class="loading-status" id="loading-status">Initializing...</p>

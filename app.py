@@ -286,7 +286,7 @@ def _score_transactions_with_model(
     artifacts = model_bundle["preprocessing"]
     engineered_cols = model_bundle["engineered_feature_names"]
     clf = model_bundle["classifier"]
-    threshold = float(model_bundle.get("classification_threshold", 0.6))
+    threshold = float(model_bundle.get("classification_threshold", 0.55))
 
     # I transform with the fitted preprocessing artifacts from training.
     X_num = transform_with_artifacts(df, artifacts)
@@ -300,15 +300,9 @@ def _score_transactions_with_model(
         if "velocity_flag" in df.columns
         else pd.Series(0.0, index=df.index)
     )
-    country_component = (
-        df["country_changed"].astype(float)
-        if "country_changed" in df.columns
-        else pd.Series(0.0, index=df.index)
-    )
     rule_scores = (
-        df["rule_based_fraud_flag"].astype(float) * 0.55
-        + velocity_component * 0.15
-        + country_component * 0.15
+        df["rule_based_fraud_flag"].astype(float) * 0.7
+        + velocity_component * 0.3
     ).clip(0.0, 1.0)
     blended_scores = (0.75 * model_scores + 0.25 * rule_scores).clip(0.0, 1.0)
     df["model_raw_score"] = model_scores
@@ -803,6 +797,121 @@ async def explain_transaction(tx_id: int, request: Request) -> JSONResponse:
             "model_fraud_flag": bool(tx.get("model_fraud_flag", False)),
             "top_model_drivers": top_features,
         }
+    )
+
+
+@app.get("/flagged_report_pdf")
+async def flagged_report_pdf(request: Request) -> Response:
+    from fpdf import FPDF
+    from datetime import datetime
+
+    s = _get_state_for_request(request)
+    if s.fraud_table is None or len(s.fraud_table) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="No flagged transactions to export. Please upload and analyze data first.",
+        )
+
+    # Custom PDF class for Shield flagged transactions
+    class ShieldPDF(FPDF):
+        def header(self):
+            # KAVACH Logo Text
+            self.set_font("helvetica", "B", 24)
+            self.set_text_color(45, 212, 191)  # Teal
+            self.cell(0, 15, "KAVACH", ln=True, align="C")
+            
+            # Subtitle
+            self.set_font("helvetica", "I", 10)
+            self.set_text_color(100, 116, 139)
+            self.cell(0, 8, "Flagged Transactions Report", ln=True, align="C")
+            
+            # Line separator
+            self.ln(5)
+            self.set_draw_color(45, 212, 191)
+            self.set_line_width(1)
+            self.line(20, self.get_y(), 190, self.get_y())
+            self.ln(10)
+            
+        def footer(self):
+            # Position at 1.5 cm from bottom
+            self.set_y(-25)
+            self.set_font("helvetica", "I", 9)
+            self.set_text_color(148, 163, 184)
+            
+            # Left footer: Date
+            self.cell(95, 8, f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}", 0, 0, "L")
+            
+            # Right footer: Page number
+            self.cell(95, 8, f"Page {self.page_no()}", 0, 0, "R")
+            
+            # Watermark
+            self.set_y(120)
+            self.set_font("helvetica", "B", 60)
+            self.set_text_color(220, 220, 220)
+            with self.local_context(text_mode="FILL"):
+                self.rotate(45, x=105, y=148.5)
+                self.cell(0, 0, "KAVACH VERIFIED", 0, 0, "C")
+                self.rotate(0)
+
+    pdf = ShieldPDF()
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+
+    # Summary section
+    pdf.set_font("helvetica", "B", 16)
+    pdf.set_text_color(15, 23, 42)
+    pdf.cell(0, 12, "Flagged Transactions Summary", ln=True)
+
+    pdf.set_font("helvetica", size=12)
+    pdf.set_text_color(51, 65, 85)
+    pdf.cell(0, 8, f"Total Flagged Transactions: {len(s.fraud_table)}", ln=True)
+    
+    if s.insights:
+        pdf.cell(0, 8, f"Total Spend Analyzed: INR {s.insights.get('total_spend', 0):,.2f}", ln=True)
+    
+    pdf.ln(10)
+
+    # Flagged Transactions Table
+    pdf.set_font("helvetica", "B", 10)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_fill_color(45, 212, 191)
+    
+    col_widths = [20, 25, 25, 30, 30, 25, 25]
+    headers = ["ID", "User", "Amount", "Category", "Merchant", "Country", "Score"]
+    
+    for i, header in enumerate(headers):
+        pdf.cell(col_widths[i], 8, header, border=1, ln=0, align="C", fill=True)
+    pdf.ln(8)
+
+    pdf.set_font("helvetica", size=9)
+    pdf.set_text_color(51, 65, 85)
+    pdf.set_fill_color(248, 250, 252)
+    fill = False
+
+    for tx in s.fraud_table:
+        pdf.cell(col_widths[0], 7, str(tx.get("id", "N/A")), border=1, ln=0, align="C", fill=fill)
+        pdf.cell(col_widths[1], 7, str(tx.get("user_id", "N/A"))[:12], border=1, ln=0, align="C", fill=fill)
+        pdf.cell(col_widths[2], 7, f"INR {float(tx.get('amount', 0)):,.2f}", border=1, ln=0, align="R", fill=fill)
+        pdf.cell(col_widths[3], 7, str(tx.get("category", "N/A"))[:15], border=1, ln=0, align="L", fill=fill)
+        pdf.cell(col_widths[4], 7, str(tx.get("merchant", "N/A"))[:15], border=1, ln=0, align="L", fill=fill)
+        pdf.cell(col_widths[5], 7, str(tx.get("country", "N/A"))[:10], border=1, ln=0, align="C", fill=fill)
+        
+        score = float(tx.get("fraud_score", 0))
+        score_text = f"{score:.2f}"
+        pdf.set_text_color(244, 63, 94) if score > 0.7 else (
+            pdf.set_text_color(251, 191, 36) if score > 0.4 else pdf.set_text_color(34, 197, 94)
+        )
+        pdf.cell(col_widths[6], 7, score_text, border=1, ln=1, align="C", fill=fill)
+        pdf.set_text_color(51, 65, 85)
+        fill = not fill
+
+    output = pdf.output(dest="S")
+    pdf_bytes = bytes(output) if isinstance(output, (bytes, bytearray)) else str(output).encode("latin1")
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=kavach-flagged-transactions.pdf"},
     )
 
 
